@@ -106,8 +106,6 @@ function turtle_viewer(turtle_ids)
                 return
             elseif monitor_touch.x == elements.turtle_return.x and monitor_touch.y == elements.turtle_return.y then
                 table.insert(state.user_input, 'return ' .. turtle_id)
-            elseif monitor_touch.x == elements.turtle_update.x and monitor_touch.y == elements.turtle_update.y then
-                table.insert(state.user_input, 'update ' .. turtle_id)
             elseif monitor_touch.x == elements.turtle_reboot.x and monitor_touch.y == elements.turtle_reboot.y then
                 table.insert(state.user_input, 'reboot ' .. turtle_id)
             elseif monitor_touch.x == elements.turtle_halt.x and monitor_touch.y == elements.turtle_halt.y then
@@ -335,12 +333,6 @@ function turtle_viewer(turtle_ids)
         term.write('*')
         term.setBackgroundColor(colors.brown)
         term.write('-RETURN')
-        
-        term.setCursorPos(elements.turtle_update.x, elements.turtle_update.y)
-        term.setBackgroundColor(colors.green)
-        term.write('*')
-        term.setBackgroundColor(colors.brown)
-        term.write('-UPDATE')
         
         term.setCursorPos(elements.turtle_reboot.x, elements.turtle_reboot.y)
         term.setBackgroundColor(colors.green)
@@ -1178,12 +1170,11 @@ function init_elements()
         turtle_lost      = {x = 13, y =  1},
         turtle_data      = {x =  4, y =  8},
         turtle_return    = {x = 26, y =  8},
-        turtle_update    = {x = 26, y =  9},
-        turtle_reboot    = {x = 26, y = 10},
-        turtle_halt      = {x = 26, y = 11},
-        turtle_clear     = {x = 26, y = 12},
-        turtle_reset     = {x = 26, y = 13},
-        turtle_find      = {x = 26, y = 14},
+        turtle_reboot    = {x = 26, y =  9},
+        turtle_halt      = {x = 26, y = 10},
+        turtle_clear     = {x = 26, y = 11},
+        turtle_reset     = {x = 26, y = 12},
+        turtle_find      = {x = 26, y = 13},
         turtle_forward   = {x = 10, y = 16},
         turtle_back      = {x = 10, y = 18},
         turtle_up        = {x = 23, y = 16},

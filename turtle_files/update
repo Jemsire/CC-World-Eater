@@ -1,333 +1,21 @@
 -- WORLD EATER: Turtle Update Script
--- Downloads files from GitHub and updates the turtle system
--- Usage: update [force-config]
---   force-config: If provided, will also update config files
+-- Copies updated files from hub's disk drive
+-- Turtles always update config files to stay in sync with hub
 
-local GITHUB_REPO = "Jemsire/CC-World-Eater"
-local GITHUB_BRANCH = "main"
-local GITHUB_BASE = "https://raw.githubusercontent.com/" .. GITHUB_REPO .. "/" .. GITHUB_BRANCH
+local drive_path = "/disk"
+local has_disk = fs.exists(drive_path)
+local update_to_root = not has_disk  -- If no disk, update directly to root
 
--- Check for force-config argument
-local force_config = false
-if arg and arg[1] == "force-config" then
-    force_config = true
-    print("Force update mode: Config files will be updated")
+if not has_disk then
+    print("⚠ No disk drive found - cannot update")
+    print("  Turtle must be at hub to update")
+    return
 end
 
--- Files to exclude from update (unless force-config is set)
-local config_files = {
-    ["turtle_files/config.lua"] = true,
-}
-
--- Turtle files to update (matching install.lua - includes update script itself)
-local turtle_files = {
-    "turtle_files/startup.lua",
-    "turtle_files/config.lua",  -- Will be skipped unless force-config
-    "turtle_files/state.lua",
-    "turtle_files/utilities.lua",
-    "turtle_files/actions.lua",
-    "turtle_files/message_receiver.lua",
-    "turtle_files/report.lua",
-    "turtle_files/turtle_main.lua",
-    "turtle_files/version.lua",
-    "turtle_files/update",  -- Update script itself
-    "turtle.lua",
-}
-
--- Check for HTTP API
-if not http then
-    error("HTTP API not available! Cannot download updates.")
-end
-
-print("========================================")
-print("  World Eater Turtle Update")
-print("========================================")
-
--- Determine drive path (check disk2 first, fall back to disk)
-local drive_path = "/disk2"
-if not fs.exists(drive_path) then
-    drive_path = "/disk"
-end
-
-if not fs.exists(drive_path) then
-    error("No disk drive found!")
-end
-
--- Function to format version table as string "MAJOR.MINOR.HOTFIX"
-local function format_version(version)
-    if version and type(version) == "table" then
-        return string.format("%d.%d.%d", version.major or 0, version.minor or 0, version.hotfix or 0)
-    end
-    return nil
-end
-
--- Function to compare two semantic versions
--- Returns: -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
-local function compare_versions(v1, v2)
-    if not v1 or not v2 or type(v1) ~= "table" or type(v2) ~= "table" then
-        return nil
-    end
-    
-    -- Compare major
-    if v1.major > v2.major then return 1 end
-    if v1.major < v2.major then return -1 end
-    
-    -- Compare minor
-    if v1.minor > v2.minor then return 1 end
-    if v1.minor < v2.minor then return -1 end
-    
-    -- Compare hotfix
-    if v1.hotfix > v2.hotfix then return 1 end
-    if v1.hotfix < v2.hotfix then return -1 end
-    
-    return 0  -- Equal
-end
-
--- Function to get local version
-local function get_local_version()
-    local version_paths = {
-        "/version.lua",
-        "/disk/turtle_files/version.lua",
-        "/disk2/turtle_files/version.lua",
-        drive_path .. "/turtle_files/version.lua"
-    }
-    
-    for _, path in ipairs(version_paths) do
-        if fs.exists(path) then
-            local version_file = fs.open(path, "r")
-            if version_file then
-                local version_code = version_file.readAll()
-                version_file.close()
-                local version_func = load(version_code)
-                if version_func then
-                    local success, version = pcall(version_func)
-                    if success and version and type(version) == "table" then
-                        return version
-                    end
-                end
-            end
-        end
-    end
-    return nil
-end
-
--- Function to get remote version from GitHub
-local function get_remote_version()
-    local url = GITHUB_BASE .. "/turtle_files/version.lua"
-    local response = http.get(url)
-    if response then
-        local content = response.readAll()
-        response.close()
-        local version_func = load(content)
-        if version_func then
-            local success, version = pcall(version_func)
-            if success and version and type(version) == "table" then
-                return version
-            end
-        end
-    end
-    return nil
-end
-
--- Check versions before updating
-local local_version = get_local_version()
-local remote_version = get_remote_version()
-
-if local_version and remote_version then
-    local local_str = format_version(local_version)
-    local remote_str = format_version(remote_version)
-    print("Current version: " .. (local_str or "unknown"))
-    print("Remote version: " .. (remote_str or "unknown"))
-    
-    local comparison = compare_versions(local_version, remote_version)
-    if comparison and comparison >= 0 then
-        print("")
-        print("Already up-to-date! No update needed.")
-        print("(Use 'update force-config' to force update)")
-        return
-    end
-    print("")
-elseif local_version then
-    print("Current version: " .. (format_version(local_version) or "unknown"))
-    print("Remote version: (unavailable)")
-    print("")
-elseif remote_version then
-    print("Current version: (not found)")
-    print("Remote version: " .. (format_version(remote_version) or "unknown"))
-    print("")
-else
-    print("Version check unavailable, proceeding with update...")
-    print("")
-end
-
-print("Downloading files from GitHub...")
-print("Repository: " .. GITHUB_REPO)
-print("")
-
-local updated_count = 0
-local skipped_count = 0
-local error_count = 0
-
--- Download and update each file
-for _, filepath in ipairs(turtle_files) do
-    -- Yield to prevent "too long without yielding" error
-    os.queueEvent("yield")
-    os.pullEvent("yield")
-    
-    -- Check if we should skip this file
-    if not force_config and config_files[filepath] then
-        print("  Skipping (config): " .. filepath)
-        skipped_count = skipped_count + 1
-    else
-        local url = GITHUB_BASE .. "/" .. filepath
-        local dest_path = drive_path .. "/" .. filepath
-        
-        print("  Downloading: " .. filepath)
-        
-        -- Yield before HTTP request
-        os.queueEvent("yield")
-        os.pullEvent("yield")
-        
-        local response = http.get(url)
-        if response then
-            -- Read content in chunks to avoid timeout
-            local content = ""
-            local chunk_count = 0
-            while true do
-                -- Yield before each read
-                if chunk_count % 2 == 0 then
-                    os.queueEvent("yield")
-                    os.pullEvent("yield")
-                end
-                chunk_count = chunk_count + 1
-                
-                local chunk = response.read(8192)  -- Read 8KB at a time
-                if not chunk then break end
-                content = content .. chunk
-                -- Yield more frequently during large downloads (every 16KB instead of 32KB)
-                if #content % 16384 == 0 then
-                    os.queueEvent("yield")
-                    os.pullEvent("yield")
-                end
-            end
-            response.close()
-            
-            -- Yield before file operations
-            os.queueEvent("yield")
-            os.pullEvent("yield")
-            
-            -- Create directory if needed
-            local dir = string.match(dest_path, "^(.-)[^/\\]*$")
-            if dir and dir ~= "" then
-                fs.makeDir(dir)
-            end
-            
-            -- Yield before write
-            os.queueEvent("yield")
-            os.pullEvent("yield")
-            
-            -- Write file (overwrites existing, matching hub update behavior)
-            local file = fs.open(dest_path, "w")
-            if file then
-                file.write(content)
-                file.close()
-                
-                -- Yield after file operations
-                os.queueEvent("yield")
-                os.pullEvent("yield")
-                
-                -- Verify file was written
-                if fs.exists(dest_path) then
-                    print("    ✓ Updated successfully")
-                    updated_count = updated_count + 1
-                else
-                    print("    ✗ File write verification failed")
-                    error_count = error_count + 1
-                end
-            else
-                print("    ✗ Failed to open file for writing")
-                error_count = error_count + 1
-            end
-        else
-            print("    ✗ Failed to download from GitHub")
-            error_count = error_count + 1
-        end
-    end
-end
-
-print("")
-print("========================================")
-print("  Update Complete")
-print("========================================")
-print(string.format("  Updated: %d files", updated_count))
-if skipped_count > 0 then
-    print(string.format("  Skipped (configs): %d files", skipped_count))
-    print("  (Use 'update force-config' to update config files)")
-end
-if error_count > 0 then
-    print(string.format("  Errors: %d files", error_count))
-end
-
--- Increment version after successful update
-if updated_count > 0 and error_count == 0 then
-    -- Use remote version as base, or default to 1.0.0
-    local base_version = remote_version or {major = 1, minor = 0, hotfix = 0}
-    
-    -- Increment hotfix by default (1.0.0 -> 1.0.1)
-    local new_version = {
-        major = base_version.major or 1,
-        minor = base_version.minor or 0,
-        hotfix = (base_version.hotfix or 0) + 1
-    }
-    
-    local version_path = drive_path .. "/turtle_files/version.lua"
-    
-    -- Create directory if needed
-    local dir = string.match(version_path, "^(.-)[^/\\]*$")
-    if dir and dir ~= "" then
-        fs.makeDir(dir)
-    end
-    
-    local version_file = fs.open(version_path, "w")
-    if version_file then
-        version_file.write("-- World Eater Turtle Version\n")
-        version_file.write("-- This version number is incremented when files are updated\n")
-        version_file.write("-- Version format: semantic versioning MAJOR.MINOR.HOTFIX\n")
-        version_file.write("-- Returns: {major=1, minor=0, hotfix=0}\n")
-        version_file.write("return {\n")
-        version_file.write("    major = " .. tostring(new_version.major) .. ",\n")
-        version_file.write("    minor = " .. tostring(new_version.minor) .. ",\n")
-        version_file.write("    hotfix = " .. tostring(new_version.hotfix) .. "\n")
-        version_file.write("}\n")
-        version_file.close()
-        print(string.format("  Version updated to: %s", format_version(new_version)))
-    end
-end
-
-print("")
-print("Running turtle.lua to copy files to root...")
-
--- Yield before final operations
-os.queueEvent("yield")
-os.pullEvent("yield")
-
-sleep(1)
-
--- Run turtle.lua to copy updated files from disk to root
--- Yield before file operations
-os.queueEvent("yield")
-os.pullEvent("yield")
-
-local turtle_lua_path = drive_path .. "/turtle.lua"
-if fs.exists(turtle_lua_path) then
-    -- Use os.run to execute turtle.lua, which will handle copying files and rebooting
-    -- We need to pass the hub_id, so we'll read it from /hub_id if it exists
+-- Function to report update completion to hub
+local function report_update_complete()
     local hub_id = nil
     if fs.exists("/hub_id") then
-        -- Yield before reading file
-        os.queueEvent("yield")
-        os.pullEvent("yield")
-        
         local hub_id_file = fs.open("/hub_id", "r")
         if hub_id_file then
             hub_id = hub_id_file.readAll()
@@ -335,10 +23,7 @@ if fs.exists(turtle_lua_path) then
         end
     end
     
-    -- Try to request re-initialization from hub before rebooting
-    -- This ensures the turtle gets the latest config after update
     if hub_id and rednet then
-        print("Requesting re-initialization from hub...")
         -- Try to open rednet if not already open
         local rednet_open = false
         for _, side in pairs({'back', 'top', 'left', 'right'}) do
@@ -350,35 +35,281 @@ if fs.exists(turtle_lua_path) then
         end
         
         if rednet_open then
-            -- Send reset request to hub (hub will detect session_id mismatch and re-initialize)
-            -- We send a message that will cause the hub to mark turtle as needing initialization
+            pcall(function()
+                rednet.send(tonumber(hub_id), {}, 'update_complete')
+                sleep(0.2)  -- Brief delay to ensure message is sent
+            end)
+        end
+    end
+end
+
+print("========================================")
+print("  World Eater Turtle Update")
+print("========================================")
+print("Copying files from hub disk drive...")
+print("")
+
+local updated_count = 0
+local skipped_count = 0
+local error_count = 0
+
+-- List of files to copy from disk (all turtle files)
+local turtle_files = {}
+local disk_turtle_path = drive_path .. "/turtle_files"
+
+if not fs.exists(disk_turtle_path) then
+    print("ERROR: turtle_files directory not found on disk!")
+    print("  Make sure hub has been updated first")
+    return
+end
+
+-- Get all files from disk/turtle_files
+local function get_files_from_disk(dir_path, base_path)
+    base_path = base_path or ""
+    local files = {}
+    
+    for _, filename in pairs(fs.list(dir_path)) do
+        local full_path = fs.combine(dir_path, filename)
+        local relative_path = base_path == "" and filename or (base_path .. "/" .. filename)
+        
+        if fs.isDir(full_path) then
+            -- Recursively get files from subdirectory
+            local sub_files = get_files_from_disk(full_path, relative_path)
+            for _, sub_file in ipairs(sub_files) do
+                table.insert(files, sub_file)
+            end
+        else
+            -- Add file to list
+            table.insert(files, "turtle_files/" .. relative_path)
+        end
+    end
+    
+    return files
+end
+
+turtle_files = get_files_from_disk(disk_turtle_path)
+
+-- Also include turtle.lua if it exists
+if fs.exists(drive_path .. "/turtle.lua") then
+    table.insert(turtle_files, "turtle.lua")
+end
+
+if #turtle_files == 0 then
+    print("No files found on disk to update!")
+    return
+end
+
+print("Found " .. #turtle_files .. " files to update")
+print("")
+
+-- Copy each file from disk
+for _, filepath in ipairs(turtle_files) do
+    -- Yield to prevent "too long without yielding" error
+    os.queueEvent("yield")
+    os.pullEvent("yield")
+    
+    local source_path = drive_path .. "/" .. filepath
+    local dest_path
+    
+    if update_to_root then
+        -- Download directly to root, removing turtle_files/ prefix
+        local root_path = string.gsub(filepath, "^turtle_files/", "")
+        dest_path = "/" .. root_path
+    else
+        dest_path = drive_path .. "/" .. filepath
+    end
+    
+    if not fs.exists(source_path) then
+        print("  Skipping (not found): " .. filepath)
+        skipped_count = skipped_count + 1
+    else
+        print("  Copying: " .. filepath)
+        
+        -- Yield before file operations
+        os.queueEvent("yield")
+        os.pullEvent("yield")
+        
+        -- Create directory if needed
+        local dir = string.match(dest_path, "^(.-)[^/\\]*$")
+        if dir and dir ~= "" and dir ~= "/" then
+            fs.makeDir(dir)
+        end
+        
+        -- Copy file
+        local success, err = pcall(function()
+            fs.copy(source_path, dest_path)
+        end)
+        
+        if success then
+            updated_count = updated_count + 1
+        else
+            print("    ERROR: " .. (err or "unknown error"))
+            error_count = error_count + 1
+        end
+    end
+end
+
+print("")
+print("========================================")
+print("  Update Summary")
+print("========================================")
+print("  Updated: " .. updated_count)
+print("  Skipped: " .. skipped_count)
+print("  Errors: " .. error_count)
+print("")
+
+if error_count > 0 then
+    print("⚠ Some files failed to update!")
+    print("  Check errors above")
+    print("")
+end
+
+if update_to_root then
+    -- Files already in root, just reboot
+    print("Files updated directly to root (no disk access)")
+    
+    -- Ensure startup file exists so turtle boots properly
+    if not fs.exists("/startup") and fs.exists("/startup.lua") then
+        print("Creating startup file...")
+        local startup_file = fs.open("/startup", "w")
+        if startup_file then
+            startup_file.write([[
+-- Auto-generated startup file for World Eater Turtle
+-- This file runs the turtle's main startup script
+
+if fs.exists('/startup.lua') then
+    shell.run('/startup.lua')
+else
+    print('startup.lua not found - run turtle.lua to initialize')
+end
+]])
+            startup_file.close()
+        end
+    end
+    
+    -- Ensure update wrapper exists
+    if not fs.exists("/update") then
+        print("Creating update wrapper...")
+        local update_wrapper = fs.open("/update", "w")
+        if update_wrapper then
+            update_wrapper.write([[
+-- Update wrapper - runs the update script from root or disk
+if fs.exists('/update.lua') then
+    shell.run('/update.lua', ...)
+elseif fs.exists('/disk/turtle_files/update') then
+    shell.run('/disk/turtle_files/update', ...)
+else
+    print('Update script not found!')
+end
+]])
+            update_wrapper.close()
+        end
+    end
+    
+    print("Rebooting to apply changes...")
+    
+    -- Report update completion to hub
+    report_update_complete()
+    
+    -- Try to request re-initialization from hub before rebooting
+    local hub_id = nil
+    if fs.exists("/hub_id") then
+        local hub_id_file = fs.open("/hub_id", "r")
+        if hub_id_file then
+            hub_id = hub_id_file.readAll()
+            hub_id_file.close()
+        end
+    end
+    
+    if hub_id and rednet then
+        print("Requesting re-initialization from hub...")
+        local rednet_open = false
+        for _, side in pairs({'back', 'top', 'left', 'right'}) do
+            if peripheral.getType(side) == 'modem' then
+                rednet.open(side)
+                rednet_open = true
+                break
+            end
+        end
+        
+        if rednet_open then
             pcall(function()
                 rednet.send(tonumber(hub_id), {
-                    action = 'reset_state',  -- Custom action to trigger re-init
+                    action = 'reset_state',
                 }, 'mastermine')
             end)
-            sleep(0.5)  -- Brief delay to let message send
+            sleep(0.5)
         end
     end
     
     print("Note: Turtle will automatically re-initialize with hub after reboot")
-    print("      to receive the latest configuration.")
+    sleep(2)
+    os.reboot()
+else
+    -- Normal flow: copy files from disk to root
+    print("Running turtle.lua to copy files to root...")
     
-    -- Yield before os.run
+    -- Report update completion to hub before running turtle.lua
+    report_update_complete()
+    
+    -- Yield before final operations
     os.queueEvent("yield")
     os.pullEvent("yield")
     
-    if hub_id then
-        os.run({hub_id}, turtle_lua_path)
+    sleep(1)
+    
+    -- Run turtle.lua to copy updated files from disk to root
+    local turtle_lua_path = drive_path .. "/turtle.lua"
+    if fs.exists(turtle_lua_path) then
+        -- Use os.run to execute turtle.lua, which will handle copying files and rebooting
+        -- We need to pass the hub_id, so we'll read it from /hub_id if it exists
+        local hub_id = nil
+        if fs.exists("/hub_id") then
+            -- Yield before reading file
+            os.queueEvent("yield")
+            os.pullEvent("yield")
+            
+            local hub_id_file = fs.open("/hub_id", "r")
+            if hub_id_file then
+                hub_id = hub_id_file.readAll()
+                hub_id_file.close()
+            end
+        end
+        
+        -- Try to request re-initialization from hub before rebooting
+        -- This ensures the turtle gets the latest config after update
+        if hub_id and rednet then
+            print("Requesting re-initialization from hub...")
+            -- Try to open rednet if not already open
+            local rednet_open = false
+            for _, side in pairs({'back', 'top', 'left', 'right'}) do
+                if peripheral.getType(side) == 'modem' then
+                    rednet.open(side)
+                    rednet_open = true
+                    break
+                end
+            end
+            
+            if rednet_open then
+                -- Send reset request to hub (hub will detect session_id mismatch and re-initialize)
+                pcall(function()
+                    rednet.send(tonumber(hub_id), {
+                        action = 'reset_state',  -- Custom action to trigger re-init
+                    }, 'mastermine')
+                end)
+                sleep(0.5)  -- Brief delay to let message send
+            end
+        end
+        
+        print("Note: Turtle will automatically re-initialize with hub after reboot")
+        print("      to receive the latest configuration.")
+        sleep(2)
+        
+        -- Run turtle.lua to copy files and reboot
+        os.run({}, turtle_lua_path, hub_id)
     else
-        print("Warning: hub_id not found, running turtle.lua without hub_id...")
-        print("You may need to manually run: disk/turtle.lua <hub_id>")
-        os.run({}, turtle_lua_path)
+        print("Error: turtle.lua not found on disk!")
+        print("Update incomplete - turtle.lua missing")
+        sleep(2)
     end
-else
-    print("Warning: turtle.lua not found, rebooting anyway...")
-    print("You may need to manually run: disk/turtle.lua <hub_id>")
-    print("Note: Turtle will automatically re-initialize with hub after reboot")
-    sleep(2)
-    os.reboot()
 end

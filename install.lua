@@ -7,9 +7,8 @@ local GITHUB_REPO = "Jemsire/CC-World-Eater"
 local GITHUB_BRANCH = "main"  -- or "master"
 local GITHUB_BASE = "https://raw.githubusercontent.com/" .. GITHUB_REPO .. "/" .. GITHUB_BRANCH
 
--- Drive assignments
-local DRIVE_HUB = "disk"      -- Hub files go here
-local DRIVE_TURTLE = "disk2"  -- Turtle/Pocket files go here (falls back to disk if only one drive)
+-- Drive assignment
+local DRIVE_PATH = "/disk"  -- All files go on single drive
 
 -- Colors for output
 local function printHeader(text)
@@ -46,36 +45,12 @@ local function detect_system_type()
     return "hub"
 end
 
--- Detect available disk drives
-local function detect_drives()
-    local drives = {}
-    
-    -- Check for disk (always check this first)
-    if peripheral.getType("top") == "drive" then
-        drives.hub = "top"
-    elseif peripheral.getType("bottom") == "drive" then
-        drives.hub = "bottom"
-    elseif peripheral.getType("left") == "drive" then
-        drives.hub = "left"
-    elseif peripheral.getType("right") == "drive" then
-        drives.hub = "right"
-    elseif peripheral.getType("back") == "drive" then
-        drives.hub = "back"
-    elseif peripheral.getType("front") == "drive" then
-        drives.hub = "front"
+-- Check for disk drive
+local function check_drive()
+    if not fs.exists("/disk") then
+        error("No disk drive found! Please attach a disk drive.")
     end
-    
-    -- Check for disk2 (second drive)
-    -- Note: CC:Tweaked uses disk, disk2, etc. for multiple drives
-    -- We'll check if we can access disk2
-    if fs.exists("/disk2") then
-        drives.turtle = "disk2"
-    elseif drives.hub then
-        -- Fallback to same drive if only one available
-        drives.turtle = drives.hub
-    end
-    
-    return drives
+    return "/disk"
 end
 
 -- Download file from GitHub
@@ -136,117 +111,194 @@ local function download_file(url, filepath)
     end
 end
 
--- Download manifest from GitHub
-local function download_manifest()
-    printStep(1, "Downloading file manifest...")
-    
-    local manifest_url = GITHUB_BASE .. "/manifest.json"
-    local manifest_path = "/manifest.json"
-    
-    local success, err = download_file(manifest_url, manifest_path)
-    if not success then
-        error("Failed to download manifest: " .. (err or "unknown error"))
+-- Simple JSON parser for GitHub Trees API response
+-- GitHub API returns: {"sha":"...","url":"...","tree":[{"path":"...","type":"file",...},...]}
+local function parse_json_simple(json_str)
+    -- Extract the tree array from the JSON response
+    -- Look for "tree":[...] pattern
+    local tree_array = string.match(json_str, '"tree"%s*:%s*%[%s*(.*)%s*%]')
+    if not tree_array then
+        return nil
     end
     
-    -- Read and parse manifest
-    local file = fs.open(manifest_path, "r")
-    if not file then
-        error("Failed to read manifest file")
+    local result = {}
+    
+    -- Parse objects in the array using regex to find path and type
+    -- This is a simplified parser that extracts "path":"value" and "type":"value" pairs
+    for path_match in string.gmatch(tree_array, '"path"%s*:%s*"([^"]+)"') do
+        -- Find the type for this path (look backwards/forwards in the object)
+        -- For simplicity, we'll extract all paths and assume files (not directories)
+        -- We'll filter directories by checking if path ends with /
+        if not string.match(path_match, "/$") then
+            table.insert(result, path_match)
+        end
     end
     
-    local content = file.readAll()
-    file.close()
+    -- Now filter to only include files (check type field)
+    local filtered = {}
+    local i = 1
+    for obj_match in string.gmatch(tree_array, '{[^}]+}') do
+        local path = string.match(obj_match, '"path"%s*:%s*"([^"]+)"')
+        local obj_type = string.match(obj_match, '"type"%s*:%s*"([^"]+)"')
+        if path and obj_type == "file" then
+            table.insert(filtered, path)
+        end
+        i = i + 1
+    end
     
-    -- Parse JSON (simple parser for basic JSON)
-    -- Note: This is a simplified parser, may need proper JSON library
-    local manifest = {}
-    -- TODO: Add JSON parsing or use textutils.unserializeJSON if available
-    
-    -- For now, we'll use a hardcoded file list
-    -- In production, parse the manifest.json properly
-    return manifest
+    return filtered
 end
 
--- Get file list based on system type
-local function get_file_list(system_type)
-    local files = {}
+-- Download file list from GitHub using API (dynamic discovery)
+local function download_file_list()
+    -- Use GitHub Trees API to get recursive file listing
+    -- Format: https://api.github.com/repos/OWNER/REPO/git/trees/BRANCH?recursive=1
+    local api_url = "https://api.github.com/repos/" .. GITHUB_REPO .. "/git/trees/" .. GITHUB_BRANCH .. "?recursive=1"
     
-    if system_type == "hub" then
-        -- Hub files go to disk
-        files = {
-            "hub_files/startup.lua",
-            "hub_files/config.lua",
-            "hub_files/state.lua",
-            "hub_files/utilities.lua",
-            "hub_files/events.lua",
-            "hub_files/monitor.lua",
-            "hub_files/report.lua",
-            "hub_files/user_input.lua",
-            "hub_files/mine_manager.lua",
-            "hub_files/update",
-            "hub.lua",
-        }
-    elseif system_type == "turtle" or system_type == "chunky" then
-        -- Turtle files go to disk2 (or disk if only one drive)
-        files = {
-            "turtle_files/startup.lua",
-            "turtle_files/config.lua",
-            "turtle_files/state.lua",
-            "turtle_files/utilities.lua",
-            "turtle_files/actions.lua",
-            "turtle_files/message_receiver.lua",
-            "turtle_files/report.lua",
-            "turtle_files/turtle_main.lua",
-            "turtle_files/update",
-            "turtle.lua",
-        }
-    elseif system_type == "pocket" then
-        -- Pocket files
-        files = {
-            "pocket_files/startup.lua",
-            "pocket_files/info.lua",
-            "pocket_files/report.lua",
-            "pocket_files/user.lua",
-            "pocket_files/update",
-            "pocket.lua",
-        }
+    local response = http.get(api_url, {
+        ["Accept"] = "application/vnd.github.v3+json"
+    })
+    
+    if not response then
+        return nil
     end
     
-    return files
+    -- Parse JSON response
+    local content = response.readAll()
+    response.close()
+    
+    -- Try textutils.unserializeJSON first (if available in CC:Tweaked)
+    local json_data = nil
+    if textutils and textutils.unserializeJSON then
+        json_data = textutils.unserializeJSON(content)
+    else
+        -- Fallback to simple parser
+        local file_paths = parse_json_simple(content)
+        if file_paths then
+            json_data = {tree = {}}
+            for _, path in ipairs(file_paths) do
+                table.insert(json_data.tree, {path = path, type = "file"})
+            end
+        end
+    end
+    
+    if not json_data or not json_data.tree then
+        return nil
+    end
+    
+    -- Group files by folder prefix
+    local file_lists = {}
+    for _, item in ipairs(json_data.tree) do
+        if item.type == "file" and item.path then
+            local path = item.path
+            -- Skip certain files
+            if not string.match(path, "^%.git/") and 
+               not string.match(path, "^%.github/") and
+               path ~= "README.md" and
+               path ~= ".gitignore" and
+               path ~= "install.lua" then
+                
+                local folder, filename = string.match(path, "^(.-)/([^/]+)$")
+                if folder and filename then
+                    if not file_lists[folder] then
+                        file_lists[folder] = {}
+                    end
+                    table.insert(file_lists[folder], path)
+                elseif not string.match(path, "/") then
+                    -- Root level file
+                    if not file_lists["root"] then
+                        file_lists["root"] = {}
+                    end
+                    table.insert(file_lists["root"], path)
+                end
+            end
+        end
+    end
+    
+    return file_lists
+end
+
+-- Get file list based on system type (with dynamic discovery fallback)
+local function get_file_list(system_type)
+    -- Try dynamic discovery first
+    local file_lists = download_file_list()
+    
+    if file_lists then
+        local files = {}
+        
+        if system_type == "hub" then
+            -- Combine hub_files and root files
+            if file_lists["hub_files"] then
+                for _, file in ipairs(file_lists["hub_files"]) do
+                    table.insert(files, file)
+                end
+            end
+            if file_lists["root"] then
+                for _, file in ipairs(file_lists["root"]) do
+                    if string.match(file, "^hub%.lua$") then
+                        table.insert(files, file)
+                    end
+                end
+            end
+        elseif system_type == "turtle" or system_type == "chunky" then
+            if file_lists["turtle_files"] then
+                for _, file in ipairs(file_lists["turtle_files"]) do
+                    table.insert(files, file)
+                end
+            end
+            if file_lists["root"] then
+                for _, file in ipairs(file_lists["root"]) do
+                    if string.match(file, "^turtle%.lua$") then
+                        table.insert(files, file)
+                    end
+                end
+            end
+        elseif system_type == "pocket" then
+            if file_lists["pocket_files"] then
+                for _, file in ipairs(file_lists["pocket_files"]) do
+                    table.insert(files, file)
+                end
+            end
+            if file_lists["root"] then
+                for _, file in ipairs(file_lists["root"]) do
+                    if string.match(file, "^pocket%.lua$") then
+                        table.insert(files, file)
+                    end
+                end
+            end
+        end
+        
+        if #files > 0 then
+            print("  Using dynamic file list from GitHub")
+            return files
+        end
+    end
+    
+    -- If we get here, GitHub API failed or returned no files
+    error("Failed to retrieve file list from GitHub API. Please check your internet connection and try again.")
 end
 
 -- Install files
-local function install_files(system_type, drives)
+local function install_files(system_type, drive_path)
     printStep(2, "Installing files...")
     
     local base_url = GITHUB_BASE
-    local has_dual_drive = drives.turtle and drives.turtle ~= drives.hub
     
-    -- If hub computer with dual drives, install ALL files (hub + turtle + pocket)
+    -- If hub computer, install ALL files (hub + turtle + pocket)
     -- Otherwise, install only files for detected system type
     local file_sets = {}
     
-    if system_type == "hub" and has_dual_drive then
-        -- Hub with dual drives: install everything
-        print("  Dual-drive detected: Installing hub, turtle, and pocket files...")
+    if system_type == "hub" then
+        -- Hub computer: install everything on single drive
+        print("  Installing hub, turtle, and pocket files...")
         file_sets = {
-            {files = get_file_list("hub"), drive = "/disk"},
-            {files = get_file_list("turtle"), drive = "/disk2"},
-            {files = get_file_list("pocket"), drive = "/disk2"}
+            {files = get_file_list("hub"), drive = drive_path},
+            {files = get_file_list("turtle"), drive = drive_path},
+            {files = get_file_list("pocket"), drive = drive_path}
         }
     else
-        -- Single drive or specific system: install only that system's files
+        -- Specific system: install only that system's files
         local files = get_file_list(system_type)
-        local drive_path = "/disk"
-        
-        if system_type == "hub" then
-            drive_path = "/disk"
-        elseif drives.turtle and drives.turtle ~= drives.hub then
-            drive_path = "/disk2"
-        else
-            drive_path = "/disk"
-        end
-        
         file_sets = {{files = files, drive = drive_path}}
     end
     
@@ -268,35 +320,23 @@ local function install_files(system_type, drives)
 end
 
 -- Validate installation
-local function validate_installation(system_type, drives)
+local function validate_installation(system_type, drive_path)
     printStep(3, "Validating installation...")
     
-    local has_dual_drive = drives.turtle and drives.turtle ~= drives.hub
-    
-    -- If hub computer with dual drives, validate ALL files
+    -- If hub computer, validate ALL files
     -- Otherwise, validate only files for detected system type
     local file_sets = {}
     
-    if system_type == "hub" and has_dual_drive then
-        -- Hub with dual drives: validate everything
+    if system_type == "hub" then
+        -- Hub computer: validate everything
         file_sets = {
-            {files = get_file_list("hub"), drive = "/disk"},
-            {files = get_file_list("turtle"), drive = "/disk2"},
-            {files = get_file_list("pocket"), drive = "/disk2"}
+            {files = get_file_list("hub"), drive = drive_path},
+            {files = get_file_list("turtle"), drive = drive_path},
+            {files = get_file_list("pocket"), drive = drive_path}
         }
     else
-        -- Single drive or specific system: validate only that system's files
+        -- Specific system: validate only that system's files
         local files = get_file_list(system_type)
-        local drive_path = "/disk"
-        
-        if system_type == "hub" then
-            drive_path = "/disk"
-        elseif drives.turtle and drives.turtle ~= drives.hub then
-            drive_path = "/disk2"
-        else
-            drive_path = "/disk"
-        end
-        
         file_sets = {{files = files, drive = drive_path}}
     end
     
@@ -369,27 +409,36 @@ end
 -- Setup wizard for hub
 local function setup_wizard(drive_path)
     printHeader("Setup Wizard")
+    print("NOTE: hub_reference is the CENTER OF THE PREPARE AREA,")
+    print("      not the hub computer location.")
+    print("      The hub computer location will be detected via GPS at startup.")
+    print("      The disk drive is always 1 block below the hub computer.")
+    print("")
+    
+    local x, y, z
+    
+    -- Manual entry for hub_reference (center of prepare area)
     print("Please enter your hub reference coordinates:")
-    print("(This is the central reference point for your setup)")
+    print("(This is the CENTER OF THE PREPARE AREA - the central reference point)")
     print("(The hub computer must be within 8 blocks north/south of this point)")
     print("")
     
     print("X coordinate: ")
-    local x = tonumber(read())
+    x = tonumber(read())
     if not x then
         print("Invalid X coordinate. Setup cancelled.")
         return false
     end
     
     print("Y coordinate (surface level): ")
-    local y = tonumber(read())
+    y = tonumber(read())
     if not y then
         print("Invalid Y coordinate. Setup cancelled.")
         return false
     end
     
     print("Z coordinate: ")
-    local z = tonumber(read())
+    z = tonumber(read())
     if not z then
         print("Invalid Z coordinate. Setup cancelled.")
         return false
@@ -402,7 +451,10 @@ local function setup_wizard(drive_path)
     if success then
         print("")
         print("✓ Configuration saved successfully!")
-        print(string.format("  Hub reference set to: X=%d, Y=%d, Z=%d", x, y, z))
+        print(string.format("  Hub reference (prepare area center): X=%d, Y=%d, Z=%d", x, y, z))
+        print("")
+        print("  Note: Disk drive location will be calculated automatically")
+        print("        at startup using GPS (1 block below hub computer)")
         return true
     else
         print("")
@@ -420,27 +472,9 @@ local function main()
     local system_type = detect_system_type()
     print("Detected system type: " .. system_type)
     
-    -- Detect drives
-    local drives = detect_drives()
-    if not drives.hub then
-        error("No disk drive found! Please attach a disk drive.")
-    end
-    
-    print("Detected drives:")
-    print("  Hub drive: " .. (drives.hub or "none"))
-    print("  Turtle drive: " .. (drives.turtle or "none (using hub drive)"))
-    
-    -- Check if dual-drive setup
-    local has_dual_drive = drives.turtle and drives.turtle ~= drives.hub
-    if system_type == "hub" and has_dual_drive then
-        print("")
-        print("✓ Dual-drive setup detected!")
-        print("  Will install hub files on disk1 and turtle/pocket files on disk2")
-    elseif system_type == "hub" and not has_dual_drive then
-        print("")
-        print("⚠ Single-drive setup detected")
-        print("  Only hub files will be installed (turtle/pocket files need disk2)")
-    end
+    -- Check for disk drive
+    local drive_path = check_drive()
+    print("Disk drive: /disk")
     
     -- Check for HTTP API
     if not http then
@@ -448,11 +482,10 @@ local function main()
     end
     
     -- Download and install
-    local manifest = download_manifest()
-    install_files(system_type, drives)
+    install_files(system_type, drive_path)
     
     -- Validate
-    if not validate_installation(system_type, drives) then
+    if not validate_installation(system_type, drive_path) then
         print("WARNING: Some files may be missing. Installation may be incomplete.")
     end
     
@@ -462,7 +495,6 @@ local function main()
         print("Run setup wizard? (y/n): ")
         local answer = read()
         if answer:lower() == "y" then
-            local drive_path = "/disk"
             setup_wizard(drive_path)
         end
     end

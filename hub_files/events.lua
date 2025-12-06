@@ -44,6 +44,12 @@ while true do
                 update_package.hub_id = os.getComputerID()
                 rednet.send(sender, update_package, 'update_package')
             end
+        
+        elseif protocol == 'update_complete' then
+            -- Turtle has completed its update
+            if on_update_complete then
+                on_update_complete(sender)
+            end
         end
         
     elseif event[1] == 'monitor_touch' then

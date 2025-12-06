@@ -25,9 +25,10 @@ A fully automated world-eating mining system for ComputerCraft turtles! Mines en
 - **Multi-Turtle Coordination**: Automatically manages multiple turtles working together
 - **Surface to Bedrock Mining**: Excavates entire areas from top to bottom
 - **GPS-Based Navigation**: Uses ComputerCraft GPS for precise positioning
-- **Dual-Drive Support**: Handles floppy disk size limitations with automatic dual-drive setup
+- **Single-Drive Setup**: All files fit on a single floppy disk (~213KB used, ~299KB remaining)
 - **Flexible Configuration**: Works with or without peripheral mods (Chunky Turtles optional)
 - **Real-Time Monitoring**: Hub computer provides status updates and control
+- **Queued Update System**: Turtles automatically return home and update one at a time at the disk drive
 
 ## 🎮 Compatibility
 
@@ -66,13 +67,14 @@ Control your World Eater system with these commands:
 
 ### Individual Turtle Control
 - `turtle <#> <action>` - Control a specific turtle
-- `update <#>` - Update a turtle's code
 - `reboot <#>` - Reboot a turtle
 - `shutdown <#>` - Shutdown a turtle
 - `reset <#>` - Reset a turtle's state
 - `clear <#>` - Clear a turtle's inventory
 - `halt <#>` - Halt a turtle's current operation
 - `return <#>` - Return a turtle to base
+
+**Note:** Turtles are updated automatically when the hub runs `update` - no individual turtle update command needed.
 
 ### Hub Control
 - `update` - Update hub computer code and all turtles (when run without turtle ID)
@@ -92,7 +94,14 @@ From the hub computer, simply type:
 update
 ```
 
-This will update both the hub computer and all connected turtles automatically.
+This will update both the hub computer and all connected turtles automatically. The update system will:
+1. Queue all turtles for update
+2. Send each turtle home (if not already there)
+3. Have turtles navigate to the disk drive one at a time
+4. Update each turtle sequentially (prevents conflicts)
+5. Update the hub computer after all turtles complete
+
+**Note:** Turtles must be able to navigate back to the hub area for updates. If a turtle is too far away or stuck, you may need to manually return it first using the `return <#>` command.
 
 To update via the update script directly (hub only):
 ```lua
@@ -106,25 +115,15 @@ disk/hub_files/update force-config
 
 ### Turtle Update
 
-From a turtle computer, run:
-```lua
-disk/turtle_files/update
--- or if using disk2:
-disk2/turtle_files/update
-```
+Turtles automatically update when the hub runs `update`. They copy files directly from the hub's disk drive (no GitHub download needed). Turtles always update their config files to stay in sync with the hub's configuration.
 
-To also update config files:
-```lua
-disk/turtle_files/update force-config
-```
+**Note:** Turtles do not have individual update commands - they are updated automatically when the hub updates.
 
 ### Pocket Computer Update
 
 From a pocket computer, run:
 ```lua
 disk/pocket_files/update
--- or if using disk2:
-disk2/pocket_files/update
 ```
 
 To also update config files:
@@ -132,18 +131,15 @@ To also update config files:
 disk/pocket_files/update force-config
 ```
 
-**Note:** By default, config files (`config.lua` and `info.lua`) are **not** updated to preserve your settings. Use `force-config` only if you want to reset to default configurations.
+**Note:** 
+- Hub update: By default, config files (`config.lua` and `info.lua`) are **not** updated to preserve your settings. Use `force-config` only if you want to reset to default configurations.
+- Turtle update: Turtles **always** update their config files when updating to stay in sync with the hub's configuration.
 
 ## 💾 Floppy Disk Size Limit
 
-There's a built-in limit in ComputerCraft for how much data a floppy disk can store, and World Eater exceeds this limit. The installer supports dual-drive installation to work around this:
+ComputerCraft has a default limit of 512KB per floppy disk. World Eater currently uses approximately 213KB total, which fits comfortably on a single disk with plenty of room for future growth (~299KB remaining).
 
-1. **Increase disk size** (Preferred): Increase floppy disk size in the mod's config file if you have access to it.
-2. **Dual-drive setup**: Place two disk drives with blank disks next to your hub computer. The installer will automatically distribute files across both drives:
-   - Hub files → First drive (`disk`)
-   - Turtle/Pocket files → Second drive (`disk2`)
-
-The installer script (`install.lua`) handles file distribution automatically, allowing you to use the full program even with the default 512KB disk limit.
+If you need more space, you can increase the floppy disk size limit in the mod's config file.
 
 ## 🔧 Troubleshooting
 
@@ -153,9 +149,9 @@ After having some chats with folks, it seems like there are some common pitfalls
 
 * **GPS has an incorrect coordinate.** There are 4 computers in the GPS setup, each with an x, y, and z coordinate. If any of these numbers are entered wrong, the GPS will act funky and nothing will work. A good way to test it's working is to enter `gps locate` into any rednet enabled computer or turtle and verify the answer.
 
-* **Mine entrance has an incorrect y value.** Similarly, the position of `mine_entrance` is essential, and must have the correct y value of the block directly above the ground (same as the disk drive in the videos). If the y value is off, I don't quite know what will happen.
+* **Hub reference coordinates are incorrect.** The `hub_reference` in the config file is the **center of the prepare area**, not the hub computer location. The hub computer location is automatically detected via GPS at startup. The disk drive location is automatically calculated as 1 block below the hub computer. Make sure your GPS system is working correctly (`gps locate` should return valid coordinates).
 
-* **Turtles are more than 8 blocks away from the mine entrance.** Turtles have to be within the `control_room_area` when they are above ground, otherwise they will get lost and end up in `halt` mode. So if your disk drive is 9 or more blocks away from the entrance, the turtles will just sit there not doing anything after you initialize them. The `control_room_area` field in the `hub_files/config.lua` file is adjustable to fit whatever size you need. **Note:** If you have a large number of turtles, you may need to increase the control room area to fit a larger turtle parking area.
+* **Turtles are more than 8 blocks away from the mine entrance.** Turtles have to be within the `control_room_area` when they are above ground, otherwise they will get lost and end up in `halt` mode. The `control_room_area` field in the `hub_files/config.lua` file is adjustable to fit whatever size you need. **Note:** If you have a large number of turtles, you may need to increase the control room area to fit a larger turtle parking area.
 
 * **Your downloaded program is not up to date.** Some things, such as compatibility with the new Advanced Peripherals mod, are newer additions and might not exist in the older code. I apologize that there aren't version numbers - I maybe should have a whole releases section but I haven't gotten that far yet. I wasn't expecting such a need for updates. Anyways, you might want to re-download the program periodically, just remember to preserve your config file somehow.
 
@@ -168,18 +164,19 @@ CC-World-Eater/
 ├── hub_files/          # Hub computer files
 │   ├── config.lua      # Hub configuration
 │   ├── monitor.lua     # Status monitoring
+│   ├── github_api.lua  # GitHub API helper functions
 │   └── ...
 ├── turtle_files/       # Turtle computer files
 │   ├── config.lua      # Turtle configuration
 │   ├── turtle_main.lua # Main turtle logic
+│   ├── github_api.lua  # GitHub API helper functions
 │   └── ...
 ├── pocket_files/       # Pocket computer files
 │   └── ...
 ├── hub.lua             # Hub startup script
 ├── turtle.lua          # Turtle startup script
 ├── pocket.lua          # Pocket startup script
-├── install.lua         # Bootstrap installer
-└── manifest.json       # File manifest for installer
+└── install.lua         # Bootstrap installer
 ```
 
 ## 🤝 Contributing

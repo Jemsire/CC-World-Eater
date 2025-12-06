@@ -21,24 +21,103 @@ local config_files = {
     ["pocket_files/info.lua"] = true,  -- Pocket config file
 }
 
--- Hub files to update
-local hub_files = {
-    "hub_files/startup.lua",
-    "hub_files/state.lua",
-    "hub_files/utilities.lua",
-    "hub_files/events.lua",
-    "hub_files/monitor.lua",
-    "hub_files/report.lua",
-    "hub_files/user_input.lua",
-    "hub_files/mine_manager.lua",
-    "hub_files/version.lua",
-    "hub.lua",
+-- Determine drive path first (needed for helper loading)
+local drive_path = "/disk"
+if not fs.exists(drive_path) then
+    error("No disk drive found!")
+end
+
+-- Load GitHub API helper (if available)
+local github_api = nil
+local helper_paths = {
+    "/disk/hub_files/github_api.lua",
+    drive_path .. "/hub_files/github_api.lua",
+    "/hub_files/github_api.lua"
 }
 
--- Add config files if force update is enabled
-if force_config then
-    table.insert(hub_files, "hub_files/config.lua")
+for _, path in ipairs(helper_paths) do
+    if fs.exists(path) then
+        local helper_func = loadfile(path)
+        if helper_func then
+            github_api = helper_func()
+            break
+        end
+    end
 end
+
+-- If helper not found, define functions inline (fallback)
+if not github_api then
+    github_api = {}
+    
+    function github_api.parse_json_simple(json_str)
+        local tree_array = string.match(json_str, '"tree"%s*:%s*%[%s*(.*)%s*%]')
+        if not tree_array then return nil end
+        local filtered = {}
+        for obj_match in string.gmatch(tree_array, '{[^}]+}') do
+            local path = string.match(obj_match, '"path"%s*:%s*"([^"]+)"')
+            local obj_type = string.match(obj_match, '"type"%s*:%s*"([^"]+)"')
+            if path and obj_type == "file" then
+                table.insert(filtered, path)
+            end
+        end
+        return filtered
+    end
+    
+    function github_api.get_file_tree(github_repo, github_branch)
+        local api_url = "https://api.github.com/repos/" .. github_repo .. "/git/trees/" .. github_branch .. "?recursive=1"
+        local response = http.get(api_url, {["Accept"] = "application/vnd.github.v3+json"})
+        if not response then return nil end
+        
+        local content = response.readAll()
+        response.close()
+        
+        local json_data = nil
+        if textutils and textutils.unserializeJSON then
+            json_data = textutils.unserializeJSON(content)
+        else
+            local file_paths = github_api.parse_json_simple(content)
+            if file_paths then
+                json_data = {tree = {}}
+                for _, path in ipairs(file_paths) do
+                    table.insert(json_data.tree, {path = path, type = "file"})
+                end
+            end
+        end
+        
+        return json_data and json_data.tree or nil
+    end
+end
+
+-- Download file list from GitHub using API (dynamic discovery)
+local function get_hub_files()
+    local tree = github_api.get_file_tree(GITHUB_REPO, GITHUB_BRANCH)
+    
+    if not tree then
+        error("Failed to retrieve file list from GitHub API. Please check your internet connection and try again.")
+    end
+    
+    -- Collect hub files
+    local hub_files = {}
+    for _, item in ipairs(tree) do
+        if item.type == "file" and item.path then
+            local path = item.path
+            -- Include hub_files/* and hub.lua, exclude config unless force_config
+            if string.match(path, "^hub_files/") then
+                -- Skip config file unless force_config is enabled
+                if not config_files[path] or force_config then
+                    table.insert(hub_files, path)
+                end
+            elseif path == "hub.lua" then
+                table.insert(hub_files, path)
+            end
+        end
+    end
+    
+    return hub_files
+end
+
+-- Get hub files dynamically from GitHub
+local hub_files = get_hub_files()
 
 -- Check for HTTP API
 if not http then
@@ -48,12 +127,6 @@ end
 print("========================================")
 print("  World Eater Hub Update")
 print("========================================")
-
--- Determine drive path
-local drive_path = "/disk"
-if not fs.exists(drive_path) then
-    error("No disk drive found!")
-end
 
 -- Function to format version table as string "MAJOR.MINOR.HOTFIX"
 local function format_version(version)

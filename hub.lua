@@ -1,6 +1,5 @@
 -- WORLD EATER: Hub startup script
--- Handles loading hub files from disk (drive 1)
--- Turtle/pocket files are on disk2 (if dual-drive setup)
+-- Handles loading hub files from disk
 
 if fs.exists('/disk/hub_files/session_id') then
     fs.delete('/disk/hub_files/session_id')
@@ -16,7 +15,7 @@ if fs.exists('/mine') then
 end
 
 for _, filename in pairs(fs.list('/')) do
-    if filename ~= 'rom' and filename ~= 'disk' and filename ~= 'disk2' and filename ~= 'openp' and filename ~= 'ppp' and filename ~= 'persistent' then
+    if filename ~= 'rom' and filename ~= 'disk' and filename ~= 'openp' and filename ~= 'ppp' and filename ~= 'persistent' then
         fs.delete(filename)
     end
 end

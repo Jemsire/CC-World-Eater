@@ -1,14 +1,10 @@
 hub_id = ...
 
--- WORLD EATER: Check both disk and disk2 for turtle files
--- Try disk2 first (if dual-drive setup), then fall back to disk
-local turtle_files_path = '/disk2/turtle_files'
-if not fs.exists(turtle_files_path) then
-    turtle_files_path = '/disk/turtle_files'
-end
+-- WORLD EATER: Load turtle files from disk
+local turtle_files_path = '/disk/turtle_files'
 
 for _, filename in pairs(fs.list('/')) do
-    if filename ~= 'rom' and filename ~= 'disk' and filename ~= 'disk2' and filename ~= 'openp' and filename ~= 'ppp' and filename ~= 'persistent' then
+    if filename ~= 'rom' and filename ~= 'disk' and filename ~= 'openp' and filename ~= 'ppp' and filename ~= 'persistent' then
         fs.delete(filename)
     end
 end
@@ -34,18 +30,13 @@ local update_wrapper = fs.open('/update', 'w')
 if update_wrapper then
     update_wrapper.write([[
 -- Update wrapper - runs the update script from disk
-local turtle_files_path = '/disk2/turtle_files'
-if not fs.exists(turtle_files_path) then
-    turtle_files_path = '/disk/turtle_files'
-end
-
-if fs.exists(turtle_files_path .. '/update') then
-    shell.run(turtle_files_path .. '/update', ...)
+if fs.exists('/disk/turtle_files/update') then
+    shell.run('/disk/turtle_files/update', ...)
 elseif fs.exists('/update') then
     shell.run('/update', ...)
 else
     print('Update script not found!')
-    print('Run: disk/turtle_files/update or disk2/turtle_files/update')
+    print('Run: disk/turtle_files/update')
 end
 ]])
     update_wrapper.close()

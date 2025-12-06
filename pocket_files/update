@@ -44,12 +44,8 @@ print("Downloading files from GitHub...")
 print("Repository: " .. GITHUB_REPO)
 print("")
 
--- Determine drive path (check disk2 first, fall back to disk)
-local drive_path = "/disk2"
-if not fs.exists(drive_path) then
-    drive_path = "/disk"
-end
-
+-- Determine drive path
+local drive_path = "/disk"
 if not fs.exists(drive_path) then
     error("No disk drive found!")
 end

@@ -557,6 +557,150 @@ function add_task(turtle, task)
 end
 
 
+function queue_turtles_for_update(turtle_list, update_hub_after)
+    -- Queue turtles for update: send home, then to disk, then update one at a time
+    if #turtle_list == 0 then
+        if update_hub_after then
+            print('All turtles updated. Updating hub...')
+            sleep(1)
+            os.run({}, '/update')
+        end
+        return
+    end
+    
+    -- Initialize update queue if needed
+    if not state.update_queue then
+        state.update_queue = {}
+        state.update_in_progress = false
+        state.update_hub_after = false
+    end
+    
+    -- Add turtles to queue
+    for _, turtle in pairs(turtle_list) do
+        turtle.tasks = {}
+        turtle.update_pending = true
+        turtle.update_complete = false
+        table.insert(state.update_queue, turtle.id)
+    end
+    
+    state.update_hub_after = update_hub_after
+    
+    -- Start processing queue
+    process_update_queue()
+end
+
+
+function process_update_queue()
+    -- Process update queue one turtle at a time
+    if state.update_in_progress or not state.update_queue or #state.update_queue == 0 then
+        -- Queue empty or already processing
+        if #state.update_queue == 0 and state.update_hub_after then
+            print('All turtles updated. Updating hub...')
+            sleep(1)
+            os.run({}, '/update')
+            state.update_hub_after = false
+        end
+        return
+    end
+    
+    local turtle_id = state.update_queue[1]
+    local turtle = state.turtles[turtle_id]
+    
+    if not turtle then
+        -- Turtle not found, remove from queue
+        table.remove(state.update_queue, 1)
+        process_update_queue()
+        return
+    end
+    
+    -- Check turtle location
+    local is_home = false
+    local is_at_disk = false
+    if turtle.data and turtle.data.location then
+        is_home = basics.in_area(turtle.data.location, config.locations.home_area) or
+                  basics.in_area(turtle.data.location, config.locations.greater_home_area)
+        is_at_disk = basics.in_location(turtle.data.location, config.locations.disk_drive)
+    end
+    
+    if is_at_disk then
+        -- Turtle is already at disk drive, send update command
+        if not turtle.update_sent_to_disk then
+            print('Turtle ' .. turtle_id .. ' already at disk drive. Starting update...')
+            state.update_in_progress = true
+            halt(turtle)
+            rednet.send(turtle.id, {
+                action = 'update',
+            }, 'mastermine')
+            turtle.update_sent_to_disk = true
+        end
+    elseif is_home then
+        -- Turtle is home, send to disk and update
+        if not turtle.update_sent_to_disk then
+            print('Sending turtle ' .. turtle_id .. ' to disk drive for update...')
+            state.update_in_progress = true
+            halt(turtle)
+            add_task(turtle, {
+                action = 'go_to_disk',
+                end_function = function()
+                    turtle.update_sent_to_disk = true
+                    -- Now send update command
+                    print('Turtle ' .. turtle_id .. ' at disk drive. Starting update...')
+                    rednet.send(turtle.id, {
+                        action = 'update',
+                    }, 'mastermine')
+                end
+            })
+            turtle.update_sent_to_disk = true
+        end
+    else
+        -- Send turtle home first
+        if not turtle.update_sent_home then
+            print('Sending turtle ' .. turtle_id .. ' home for update...')
+            halt(turtle)
+            send_turtle_up(turtle)
+            add_task(turtle, {
+                action = 'go_to_home',
+                end_function = function()
+                    turtle.update_sent_home = true
+                    process_update_queue()
+                end
+            })
+            turtle.update_sent_home = true
+        end
+    end
+end
+
+
+function on_update_complete(turtle_id)
+    -- Called when a turtle completes its update
+    if not state.update_queue then
+        return
+    end
+    
+    -- Remove from queue
+    for i, id in ipairs(state.update_queue) do
+        if id == turtle_id then
+            table.remove(state.update_queue, i)
+            break
+        end
+    end
+    
+    local turtle = state.turtles[turtle_id]
+    if turtle then
+        turtle.update_pending = false
+        turtle.update_complete = true
+        turtle.update_sent_home = nil
+        turtle.update_sent_to_disk = nil
+        print('Turtle ' .. turtle_id .. ' update complete!')
+    end
+    
+    state.update_in_progress = false
+    
+    -- Process next turtle in queue
+    process_update_queue()
+end
+
+
 function send_tasks(turtle)
     local task = turtle.tasks[1]
     if task then
@@ -662,28 +806,21 @@ function user_input(input)
         elseif command == 'update' then
             -- UPDATE TURTLES AND/OR HUB
             if turtle_id_string then
-                -- Update specific turtle(s)
+                -- Update specific turtle(s) - queue them one at a time
+                local turtle_list = {}
                 for _, turtle in pairs(turtles) do
-                    turtle.tasks = {}
-                    add_task(turtle, {action = 'pass'})
-                    rednet.send(turtle.id, {
-                        action = 'update',
-                    }, 'mastermine')
+                    table.insert(turtle_list, turtle)
                 end
+                queue_turtles_for_update(turtle_list, false)
             else
                 -- Update hub and all turtles
                 print('Updating hub and all turtles...')
-                -- First update all turtles
+                -- Queue all turtles for update
+                local turtle_list = {}
                 for _, turtle in pairs(state.turtles) do
-                    turtle.tasks = {}
-                    add_task(turtle, {action = 'pass'})
-                    rednet.send(turtle.id, {
-                        action = 'update',
-                    }, 'mastermine')
+                    table.insert(turtle_list, turtle)
                 end
-                -- Then update hub
-                sleep(1)  -- Brief delay to let turtle update commands send
-                os.run({}, '/update')
+                queue_turtles_for_update(turtle_list, true)
             end
         elseif command == 'return' then
             -- BRING TURTLE HOME
@@ -737,6 +874,11 @@ end
 
 
 function command_turtles()
+    -- Process update queue if active
+    if state.update_queue and #state.update_queue > 0 then
+        process_update_queue()
+    end
+    
     local turtles_for_pair = {}
     
     for _, turtle in pairs(state.turtles) do

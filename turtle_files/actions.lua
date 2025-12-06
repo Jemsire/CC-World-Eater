@@ -386,6 +386,16 @@ function go_to_refuel()
 end
 
 
+function go_to_disk()
+    if not config.locations.main_loop_route[basics.str_xyz(state.location)] then
+        if not go_to_home() then return false end
+        if not go_to_home_exit() then return false end
+    end
+    if not go_route(config.locations.main_loop_route, config.locations.disk_drive) then return false end
+    return true
+end
+
+
 function go_to_waiting_room()
     if not basics.in_area(state.location, config.locations.waiting_room_line_area) then
         if not go_to_home() then return false end

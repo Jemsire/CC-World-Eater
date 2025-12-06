@@ -161,6 +161,12 @@ locations = {
      -- TO ACCESS THE CHEST FOR FUEL
     refuel = {x = c.x+2, y = c.y+1, z = c.z+0, orientation = 'east'},
 
+     -- THE BLOCK TURTLES GO TO IN ORDER
+     -- TO ACCESS THE DISK DRIVE FOR UPDATES
+     --     Disk drive is always 1 block below the hub computer (calculated dynamically at startup)
+     --     This is a placeholder - actual location is set in startup.lua using GPS
+    disk_drive = {x = 0, y = 0, z = 0, orientation = 'east'},
+
      -- THE AREA ENCOMPASSING TURTLE HOMES
      --     where they sleep.
     greater_home_area = {
