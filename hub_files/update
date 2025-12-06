@@ -114,8 +114,22 @@ for _, filepath in ipairs(hub_files) do
                 os.queueEvent("yield")
                 os.pullEvent("yield")
                 
-                -- Verify file was written
+                -- Verify file was written and check content
                 if fs.exists(dest_path) then
+                    -- For monitor.lua, verify key content was downloaded
+                    if filepath == "hub_files/monitor.lua" then
+                        local verify_file = fs.open(dest_path, "r")
+                        if verify_file then
+                            local content_check = verify_file.readAll()
+                            verify_file.close()
+                            if content_check:find("term%.write%('WORLD'") then
+                                print("    ✓ Updated successfully (verified)")
+                            else
+                                print("    ⚠ Updated but content verification failed")
+                                print("      (File may be outdated on GitHub)")
+                            end
+                        end
+                    end
                     print("    ✓ Updated successfully")
                     updated_count = updated_count + 1
                 else
