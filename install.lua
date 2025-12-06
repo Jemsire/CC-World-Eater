@@ -106,6 +106,11 @@ local function download_file(url, filepath)
         file.write(content)
         file.close()
         
+        -- Verify file was written
+        if not fs.exists(filepath) then
+            return false, "File write verification failed"
+        end
+        
         return true
     else
         return false, "HTTP API not available"
