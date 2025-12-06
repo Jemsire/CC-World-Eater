@@ -19,22 +19,19 @@ local config_files = {
     ["turtle_files/config.lua"] = true,
 }
 
--- Turtle files to update
+-- Turtle files to update (matching install.lua - includes update script itself)
 local turtle_files = {
     "turtle_files/startup.lua",
+    "turtle_files/config.lua",  -- Will be skipped unless force-config
     "turtle_files/state.lua",
     "turtle_files/utilities.lua",
     "turtle_files/actions.lua",
     "turtle_files/message_receiver.lua",
     "turtle_files/report.lua",
     "turtle_files/turtle_main.lua",
+    "turtle_files/update",  -- Update script itself
     "turtle.lua",
 }
-
--- Add config files if force update is enabled
-if force_config then
-    table.insert(turtle_files, "turtle_files/config.lua")
-end
 
 -- Check for HTTP API
 if not http then
@@ -78,21 +75,37 @@ for _, filepath in ipairs(turtle_files) do
         
         print("  Downloading: " .. filepath)
         
+        -- Yield before HTTP request
+        os.queueEvent("yield")
+        os.pullEvent("yield")
+        
         local response = http.get(url)
         if response then
             -- Read content in chunks to avoid timeout
             local content = ""
+            local chunk_count = 0
             while true do
+                -- Yield before each read
+                if chunk_count % 2 == 0 then
+                    os.queueEvent("yield")
+                    os.pullEvent("yield")
+                end
+                chunk_count = chunk_count + 1
+                
                 local chunk = response.read(8192)  -- Read 8KB at a time
                 if not chunk then break end
                 content = content .. chunk
-                -- Yield periodically during large downloads
-                if #content % 32768 == 0 then
+                -- Yield more frequently during large downloads (every 16KB instead of 32KB)
+                if #content % 16384 == 0 then
                     os.queueEvent("yield")
                     os.pullEvent("yield")
                 end
             end
             response.close()
+            
+            -- Yield before file operations
+            os.queueEvent("yield")
+            os.pullEvent("yield")
             
             -- Create directory if needed
             local dir = string.match(dest_path, "^(.-)[^/\\]*$")
@@ -100,12 +113,11 @@ for _, filepath in ipairs(turtle_files) do
                 fs.makeDir(dir)
             end
             
-            -- Delete existing file first to ensure clean overwrite
-            if fs.exists(dest_path) then
-                fs.delete(dest_path)
-            end
+            -- Yield before write
+            os.queueEvent("yield")
+            os.pullEvent("yield")
             
-            -- Write file (complete overwrite)
+            -- Write file (overwrites existing, matching hub update behavior)
             local file = fs.open(dest_path, "w")
             if file then
                 file.write(content)
@@ -148,6 +160,11 @@ if error_count > 0 then
 end
 print("")
 print("Running turtle.lua to copy files to root...")
+
+-- Yield before final operations
+os.queueEvent("yield")
+os.pullEvent("yield")
+
 sleep(1)
 
 -- Run turtle.lua to copy updated files from disk to root
@@ -157,18 +174,59 @@ if not fs.exists(drive_path) then
     drive_path = "/disk"
 end
 
+-- Yield before file operations
+os.queueEvent("yield")
+os.pullEvent("yield")
+
 local turtle_lua_path = drive_path .. "/turtle.lua"
 if fs.exists(turtle_lua_path) then
     -- Use os.run to execute turtle.lua, which will handle copying files and rebooting
     -- We need to pass the hub_id, so we'll read it from /hub_id if it exists
     local hub_id = nil
     if fs.exists("/hub_id") then
+        -- Yield before reading file
+        os.queueEvent("yield")
+        os.pullEvent("yield")
+        
         local hub_id_file = fs.open("/hub_id", "r")
         if hub_id_file then
             hub_id = hub_id_file.readAll()
             hub_id_file.close()
         end
     end
+    
+    -- Try to request re-initialization from hub before rebooting
+    -- This ensures the turtle gets the latest config after update
+    if hub_id and rednet then
+        print("Requesting re-initialization from hub...")
+        -- Try to open rednet if not already open
+        local rednet_open = false
+        for _, side in pairs({'back', 'top', 'left', 'right'}) do
+            if peripheral.getType(side) == 'modem' then
+                rednet.open(side)
+                rednet_open = true
+                break
+            end
+        end
+        
+        if rednet_open then
+            -- Send reset request to hub (hub will detect session_id mismatch and re-initialize)
+            -- We send a message that will cause the hub to mark turtle as needing initialization
+            pcall(function()
+                rednet.send(tonumber(hub_id), {
+                    action = 'reset_state',  -- Custom action to trigger re-init
+                }, 'mastermine')
+            end)
+            sleep(0.5)  -- Brief delay to let message send
+        end
+    end
+    
+    print("Note: Turtle will automatically re-initialize with hub after reboot")
+    print("      to receive the latest configuration.")
+    
+    -- Yield before os.run
+    os.queueEvent("yield")
+    os.pullEvent("yield")
     
     if hub_id then
         os.run({hub_id}, turtle_lua_path)
@@ -180,6 +238,7 @@ if fs.exists(turtle_lua_path) then
 else
     print("Warning: turtle.lua not found, rebooting anyway...")
     print("You may need to manually run: disk/turtle.lua <hub_id>")
+    print("Note: Turtle will automatically re-initialize with hub after reboot")
     sleep(2)
     os.reboot()
 end
