@@ -46,13 +46,9 @@ jobs:
           echo "previous=${PREV}" >> $GITHUB_OUTPUT
           echo "Previous tag: $PREV"
 
-      - name: Generate changelog (with authors)
-        id: changelog
+      - name: Generate changelog
         run: |
-          NEW_TAG="${{ steps.version.outputs.tag }}"
           OLD_TAG="${{ steps.prev.outputs.previous }}"
-
-          echo "Generating changelog from $OLD_TAG to $NEW_TAG"
 
           if [ -z "$OLD_TAG" ]; then
             git log --pretty=format:"- %s (%h) — by %an" > CHANGELOG.md
@@ -60,21 +56,20 @@ jobs:
             git log "$OLD_TAG"..HEAD --pretty=format:"- %s (%h) — by %an" > CHANGELOG.md
           fi
 
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          cat CHANGELOG.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
       - name: Create or Update Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ steps.version.outputs.tag }}"
           VERSION="${{ steps.version.outputs.version }}"
+
           CHANGELOG_CONTENT=$(cat CHANGELOG.md)
 
-          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${TAG} --jq '.id' 2>/dev/null || echo "")
+          # Build notes without heredoc
+          NOTES=$(printf "### Version %s\n\n#### Changes\n%s\n\nAutomatically generated from commit history, including authors.\n" \
+            "$VERSION" "$CHANGELOG_CONTENT")
 
-          NOTES=$(printf "### Version %s\n\n#### Changes\n%s\n\nAutomatically generated from commit history, including authors.\n" "$VERSION" "$CHANGELOG_CONTENT")
+          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${TAG} --jq '.id' 2>/dev/null || echo "")
 
           if [ -z "$RELEASE_ID" ]; then
             gh release create "$TAG" --title "v${VERSION}" --notes "$NOTES" --latest
