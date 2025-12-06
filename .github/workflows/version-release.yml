@@ -36,8 +36,10 @@ jobs:
           HOTFIX=$(grep -v '^\s*--' "$VF" | grep -E 'hotfix\s*=' | sed -E 's/.*hotfix[[:space:]]*=[[:space:]]*([0-9]+).*/\1/')
 
           VERSION="${MAJOR}.${MINOR}.${HOTFIX}"
+          TAG="v${VERSION}"
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "tag=v${VERSION}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Parsed version: ${VERSION}, tag: ${TAG}"
 
       - name: Determine previous tag
         id: prev
