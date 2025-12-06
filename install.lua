@@ -82,6 +82,10 @@ end
 local function download_file(url, filepath)
     print("  Downloading: " .. filepath)
     
+    -- Yield to prevent "too long without yielding" error
+    os.queueEvent("yield")
+    os.pullEvent("yield")
+    
     -- Try to use http API
     if http then
         local response = http.get(url)
@@ -89,7 +93,18 @@ local function download_file(url, filepath)
             return false, "HTTP request failed"
         end
         
-        local content = response.readAll()
+        -- Read content in chunks to avoid timeout
+        local content = ""
+        while true do
+            local chunk = response.read(8192)  -- Read 8KB at a time
+            if not chunk then break end
+            content = content .. chunk
+            -- Yield periodically during large downloads
+            if #content % 32768 == 0 then
+                os.queueEvent("yield")
+                os.pullEvent("yield")
+            end
+        end
         response.close()
         
         -- Create directory if needed
@@ -98,13 +113,17 @@ local function download_file(url, filepath)
             fs.makeDir(dir)
         end
         
-        -- Write file
+        -- Write file (overwrites existing)
         local file = fs.open(filepath, "w")
         if not file then
             return false, "Failed to open file for writing"
         end
         file.write(content)
         file.close()
+        
+        -- Yield after file operations
+        os.queueEvent("yield")
+        os.pullEvent("yield")
         
         -- Verify file was written
         if not fs.exists(filepath) then
@@ -164,6 +183,7 @@ local function get_file_list(system_type)
             "hub_files/report.lua",
             "hub_files/user_input.lua",
             "hub_files/mine_manager.lua",
+            "hub_files/update",
             "hub.lua",
         }
     elseif system_type == "turtle" or system_type == "chunky" then
@@ -177,6 +197,7 @@ local function get_file_list(system_type)
             "turtle_files/message_receiver.lua",
             "turtle_files/report.lua",
             "turtle_files/turtle_main.lua",
+            "turtle_files/update",
             "turtle.lua",
         }
     elseif system_type == "pocket" then
@@ -186,6 +207,7 @@ local function get_file_list(system_type)
             "pocket_files/info.lua",
             "pocket_files/report.lua",
             "pocket_files/user.lua",
+            "pocket_files/update",
             "pocket.lua",
         }
     end
