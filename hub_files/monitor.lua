@@ -1209,9 +1209,9 @@ function main()
     
     init_elements()
     
-    -- Wait for state.mine with loading indicator
+    -- Wait for mine state to be initialized (state.mine or state.mined_blocks)
     local wait_count = 0
-    while not state.mine do
+    while not state.mine and not state.mined_blocks do
         wait_count = wait_count + 1
         if wait_count % 4 == 0 then
             -- Update loading message every 2 seconds

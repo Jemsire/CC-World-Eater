@@ -49,6 +49,9 @@ function load_mine()
         end
     end
     
+    -- Set state.mine flag for monitor compatibility
+    state.mine = true
+    
     state.turtles_dir_path = state.mine_dir_path .. 'turtles/'
     
     if not fs.exists(state.turtles_dir_path) then
