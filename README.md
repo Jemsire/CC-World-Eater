@@ -7,35 +7,29 @@
 [![GitHub issues](https://img.shields.io/github/issues/Jemsire/CC-World-Eater?style=flat-square)](https://github.com/Jemsire/CC-World-Eater/issues)
 [![Discord](https://img.shields.io/discord/195687811733651456?style=flat-square&logo=discord&logoColor=white&label=Discord&color=5865F2)](https://discord.jemsire.com/)
 
-A world eater setup for multi turtle excavation!
-
 A fully automated world-eating mining system for ComputerCraft turtles! Mines entire areas from surface to bedrock using coordinated multi-turtle operations.
 
 ## 🚀 Quick Start
 
 ### Prep Area (Setup)
 ![Prep area (Setup)](assets/images/prep-area.png)
-> 8 blocks each direction from center block(Stone border shown is 19x19)
->
-> Left and right should be left clear when setting up turtles
->
-> Computer can be built anywhere south or north of the main center block
->
-> From center block mine down a block and 1 block south of the center block
->
-> Prep at least 1 pair if using chunk turtles or 1 miner if not
->
-> Top chest is a fuel chest
->
-> Lower chest is the dump chest so make sure it has lots of space or a storage system attached.
+```
+8 blocks each direction from center block(Stone border shown is 19x19)
+Left and right should be left clear when setting up turtles
+Computer can be built anywhere south or north of the main center block
+From center block mine down a block and 1 block south of the center block
+Prep at least 1 pair if using chunk turtles or 1 miner if not
+Top chest is a fuel chest
+Lower chest is the dump chest so make sure it has lots of space or a storage system attached.
+```
 
 ### Main Computer (Setup)
 ![Main Computer (Setup)](assets/images/computer-setup.png)
-> Drive MUST be one block below computer
->
-> Wireless modem should be on top to save space.
->
-> Monitors are 4 long by 3 tall (4x3)
+```
+Drive MUST be one block below computer
+Wireless modem should be on top to save space.
+Monitors are 4 long by 3 tall (4x3)
+```
 
 ### Installation via GitHub(Recommended Method)
 
@@ -145,16 +139,16 @@ Configure in `dig_disallow` table in `hub_files/config.lua`.
 ## 📸 Screenshots
 
 ![Main Screen](assets/images/main-screen.png)
-> Main mining screen to show whats complete and whats not.
+```Main mining screen to show whats complete and whats not.```
 
 ![Turtle View](assets/images/turtle-menu.png)
-> View each turtle individually for debugging or controlling manually.
+```View each turtle individually for debugging or controlling manually.```
 
 ![Auto Updater](assets/images/auto-update.png)
-> Auto updater that grabs from github for latest updates easily!
+```Auto updater that grabs from github for latest updates easily!```
 
 ![Settings Menu](assets/images/computer-setup.png)
-> Settings menu allows you to mass send commands to turtles and turn it on or off.
+```Settings menu allows you to mass send commands to turtles and turn it on or off.```
 
 ## 🎮 User Commands
 
