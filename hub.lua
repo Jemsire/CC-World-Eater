@@ -24,6 +24,23 @@ for _, filename in pairs(fs.list('/disk/hub_files')) do
     fs.copy('/disk/hub_files/' .. filename, '/' .. filename)
 end
 
+-- Create update wrapper script in root so "update" command works
+local update_wrapper = fs.open('/update', 'w')
+if update_wrapper then
+    update_wrapper.write([[
+-- Update wrapper - runs the update script from disk
+if fs.exists('/disk/hub_files/update') then
+    shell.run('/disk/hub_files/update', ...)
+elseif fs.exists('/update') then
+    shell.run('/update', ...)
+else
+    print('Update script not found!')
+    print('Run: disk/hub_files/update')
+end
+]])
+    update_wrapper.close()
+end
+
 -- Create startup file to automatically run startup.lua on boot
 -- (startup.lua is already copied from hub_files by this script)
 local startup_file = fs.open('/startup', 'w')
