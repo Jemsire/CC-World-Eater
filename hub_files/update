@@ -1,1 +1,120 @@
-os.run({}, '/disk/hub.lua')
+-- WORLD EATER: Hub Update Script
+-- Downloads files from GitHub and updates the hub system
+-- Usage: update [force-config]
+--   force-config: If provided, will also update config files
+
+local GITHUB_REPO = "Jemsire/CC-World-Eater"
+local GITHUB_BRANCH = "main"
+local GITHUB_BASE = "https://raw.githubusercontent.com/" .. GITHUB_REPO .. "/" .. GITHUB_BRANCH
+
+-- Check for force-config argument
+local force_config = false
+if arg and arg[1] == "force-config" then
+    force_config = true
+    print("Force update mode: Config files will be updated")
+end
+
+-- Files to exclude from update (unless force-config is set)
+local config_files = {
+    ["hub_files/config.lua"] = true,
+    ["turtle_files/config.lua"] = true,
+    ["pocket_files/info.lua"] = true,  -- Pocket config file
+}
+
+-- Hub files to update
+local hub_files = {
+    "hub_files/startup.lua",
+    "hub_files/state.lua",
+    "hub_files/utilities.lua",
+    "hub_files/events.lua",
+    "hub_files/monitor.lua",
+    "hub_files/report.lua",
+    "hub_files/user_input.lua",
+    "hub_files/mine_manager.lua",
+    "hub.lua",
+}
+
+-- Add config files if force update is enabled
+if force_config then
+    table.insert(hub_files, "hub_files/config.lua")
+end
+
+-- Check for HTTP API
+if not http then
+    error("HTTP API not available! Cannot download updates.")
+end
+
+print("========================================")
+print("  World Eater Hub Update")
+print("========================================")
+print("Downloading files from GitHub...")
+print("Repository: " .. GITHUB_REPO)
+print("")
+
+-- Determine drive path
+local drive_path = "/disk"
+if not fs.exists(drive_path) then
+    error("No disk drive found!")
+end
+
+local updated_count = 0
+local skipped_count = 0
+local error_count = 0
+
+-- Download and update each file
+for _, filepath in ipairs(hub_files) do
+    -- Check if we should skip this file
+    if not force_config and config_files[filepath] then
+        print("  Skipping (config): " .. filepath)
+        skipped_count = skipped_count + 1
+    else
+        local url = GITHUB_BASE .. "/" .. filepath
+        local dest_path = drive_path .. "/" .. filepath
+        
+        print("  Downloading: " .. filepath)
+        
+        local response = http.get(url)
+        if response then
+            local content = response.readAll()
+            response.close()
+            
+            -- Create directory if needed
+            local dir = string.match(dest_path, "^(.-)[^/\\]*$")
+            if dir and dir ~= "" then
+                fs.makeDir(dir)
+            end
+            
+            -- Write file
+            local file = fs.open(dest_path, "w")
+            if file then
+                file.write(content)
+                file.close()
+                print("    ✓ Updated successfully")
+                updated_count = updated_count + 1
+            else
+                print("    ✗ Failed to write file")
+                error_count = error_count + 1
+            end
+        else
+            print("    ✗ Failed to download")
+            error_count = error_count + 1
+        end
+    end
+end
+
+print("")
+print("========================================")
+print("  Update Complete")
+print("========================================")
+print(string.format("  Updated: %d files", updated_count))
+if skipped_count > 0 then
+    print(string.format("  Skipped (configs): %d files", skipped_count))
+    print("  (Use 'update force-config' to update config files)")
+end
+if error_count > 0 then
+    print(string.format("  Errors: %d files", error_count))
+end
+print("")
+print("Rebooting to apply changes...")
+sleep(2)
+os.reboot()
