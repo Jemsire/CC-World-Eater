@@ -6,4 +6,3 @@
 --     This should match the hub config bedrock_level
 --     Defaults to -64 for Minecraft 1.18+
 bedrock_level = -64
-

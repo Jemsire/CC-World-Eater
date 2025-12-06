@@ -62,4 +62,3 @@ Use the feature request template and include:
 Feel free to open a discussion or check the video tutorials for setup help.
 
 Thank you for contributing! 🐢
-

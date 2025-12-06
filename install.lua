@@ -456,4 +456,3 @@ end
 
 -- Run installer
 main()
-
