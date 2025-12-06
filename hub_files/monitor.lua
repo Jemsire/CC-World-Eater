@@ -841,7 +841,7 @@ function menu()
         if version then
             local version_str = format_version(version)
             if version_str then
-                term.setCursorPos(elements.menu_title.x, elements.menu_title.y + 7)
+                term.setCursorPos(elements.version.x, elements.version.y)
                 term.setTextColor(colors.gray)
                 term.write("v" .. version_str)
                 term.setTextColor(colors.white)
@@ -1165,6 +1165,7 @@ function init_elements()
         x_indicator      = {x =  1, y =  2},
         z_indicator      = {x =  1, y =  3},
         viewer_exit      = {x =  1, y =  1},
+        version          = {x =  2, y =  1},
         turtle_face      = {x =  5, y =  2},
         turtle_id        = {x = 16, y =  2},
         turtle_lost      = {x = 13, y =  1},
