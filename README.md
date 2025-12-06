@@ -52,10 +52,10 @@ I highly recommend using a peripherals mod with chunky turtles, but upon popular
 ## 📺 Video Tutorials
 
 ### Description Video
-[![World Eater Description](https://img.youtube.com/vi/2I2VXl9Pg6Q/0.jpg)](https://www.youtube.com/watch?v=2I2VXl9Pg6Q)
+**Coming Soon**
 
 ### Installation Tutorial
-[![World Eater Tutorial](https://img.youtube.com/vi/2DTP1LXuiCg/0.jpg)](https://www.youtube.com/watch?v=2DTP1LXuiCg)
+**Coming Soon**
 
 ## 🎮 User Commands
 
@@ -189,6 +189,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
+- [Mastermine](https://github.com/merlinlikethewizard/Mastermine) - The original script that this project was reworked from
 - CC Tweaked for the amazing ComputerCraft implementation
 - Advanced Peripherals / Peripherals Plus One for enhanced turtle capabilities
 - All the community members who have tested and provided feedback
