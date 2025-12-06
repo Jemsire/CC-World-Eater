@@ -18,14 +18,14 @@ os.loadAPI('/apis/basics')
 if gps then
     local hub_x, hub_y, hub_z = gps.locate()
     if hub_x and hub_y and hub_z then
-        -- Disk drive is 1 block below hub computer, 1 block east
+        -- Disk drive is 1 block below hub computer (only y coordinate changes)
         config.locations.disk_drive = {
             x = hub_x,
             y = hub_y - 1,
             z = hub_z,
             orientation = 'east'
         }
-        print("Disk drive location set to: X=" .. (hub_x + 1) .. ", Y=" .. (hub_y - 1) .. ", Z=" .. hub_z)
+        print("Disk drive location set to: X=" .. hub_x .. ", Y=" .. (hub_y - 1) .. ", Z=" .. hub_z)
     else
         print("WARNING: Could not get GPS location. Disk drive location may be incorrect.")
     end
