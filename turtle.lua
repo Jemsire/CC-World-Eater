@@ -5,7 +5,15 @@ local turtle_files_path = '/disk/turtle_files'
 
 for _, filename in pairs(fs.list('/')) do
     if filename ~= 'rom' and filename ~= 'disk' and filename ~= 'openp' and filename ~= 'ppp' and filename ~= 'persistent' then
-        fs.delete(filename)
+        -- Skip all disk mount points (defensive - we only use /disk, but skip others if present)
+        if not string.match(filename, '^disk%d*$') then
+            local full_path = '/' .. filename
+            -- Use pcall to handle errors gracefully (e.g., protected mount points)
+            local success, err = pcall(fs.delete, full_path)
+            if not success then
+                -- Silently skip files that can't be deleted (mount points, etc.)
+            end
+        end
     end
 end
 
