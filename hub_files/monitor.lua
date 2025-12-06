@@ -120,12 +120,9 @@ function turtle_viewer(turtle_ids)
                 monitor_location.x = turtle.data.location.x
                 monitor_location.z = turtle.data.location.z
                 monitor_zoom_level = 0
-                for level_index, level_and_chance in pairs(config.mine_levels) do
-                    if turtle.strip and level_and_chance.level == turtle.strip.y then
-                        monitor_level_index = level_index
-                        select_mine_level()
-                        break
-                    end
+                if turtle.block then
+                    monitor_location.x = turtle.block.x
+                    monitor_location.z = turtle.block.z
                 end
                 term.redirect(monitor.restore_to)
                 return
@@ -904,60 +901,47 @@ function draw_monitor()
     
     local mined = {}
     local xz
-    for x = min_location.x - ((min_location.x - config.locations.mine_enter.x) % config.grid_width), min_location.x + (monitor_width * zoom_factor), config.grid_width do
+    for x = min_location.x, min_location.x + (monitor_width * zoom_factor), zoom_factor do
         for z = min_location.z, min_location.z + (monitor_height * zoom_factor), zoom_factor do
             xz = x .. ',' .. z
             if not mined[xz] then
-                if z > config.locations.mine_enter.z then
-                    if monitor_level[x] and monitor_level[x].south.z > z then
-                        mined[xz] = true
-                        draw_location({x = x, z = z}, colors.lightGray)
-                    else
-                        draw_location({x = x, z = z}, colors.gray)
-                    end
+                -- Check if this block is mined
+                if state.mined_blocks and state.mined_blocks[x] and state.mined_blocks[x][z] then
+                    mined[xz] = true
+                    draw_location({x = x, z = z}, colors.lightGray)
                 else
-                    if monitor_level[x] and monitor_level[x].north.z < z then
-                        mined[xz] = true
-                        draw_location({x = x, z = z}, colors.lightGray)
-                    else
-                        draw_location({x = x, z = z}, colors.gray)
-                    end
+                    draw_location({x = x, z = z}, colors.gray)
                 end
             end
-        end
-    end
-    
-    for x = min_location.x, min_location.x + (monitor_width * zoom_factor), zoom_factor do
-        if x > monitor_level.main_shaft.west.x and x < monitor_level.main_shaft.east.x then
-            draw_location({x = x, z = config.locations.mine_enter.z}, colors.lightGray)
-        else
-            draw_location({x = x, z = config.locations.mine_enter.z}, colors.gray)
         end
     end
     
     local pixel
     local special = {}
     
-    pixel = draw_location(config.locations.mine_exit, colors.blue)
-    if pixel then
-        special[pixel.x .. ',' .. pixel.y] = colors.blue
+    local mine_enter = config.locations and config.locations.mine_enter or config.mine_entrance
+    if mine_enter then
+        pixel = draw_location(mine_enter, colors.blue)
+        if pixel then
+            special[pixel.x .. ',' .. pixel.y] = colors.blue
+        end
     end
     
-    pixel = draw_location(config.locations.mine_enter, colors.blue)
-    if pixel then
-        special[pixel.x .. ',' .. pixel.y] = colors.blue
+    -- Draw mining center (2 blocks below hub_reference)
+    if config.mining_center then
+        pixel = draw_location({x = config.mining_center.x, y = config.mining_center.y, z = config.mining_center.z}, colors.cyan)
+        if pixel then
+            special[pixel.x .. ',' .. pixel.y] = colors.cyan
+        end
     end
     
-    -- DRAW STRIP ENDINGS
-    for name, strip in pairs(monitor_level) do
-        if name ~= 'y' then
-            for _, strip_end in pairs(strip) do
-                if strip_end.turtles then
-                    pixel = draw_location(strip_end, colors.green)
-                    if pixel then
-                        special[pixel.x .. ',' .. pixel.y] = colors.green
-                    end
-                end
+    -- Draw turtle assigned blocks (if they have blocks assigned)
+    for _, turtle in pairs(state.turtles) do
+        if turtle.block then
+            local mine_enter_y = (config.locations and config.locations.mine_enter and config.locations.mine_enter.y) or (config.mine_entrance and config.mine_entrance.y) or config.hub_reference.y
+            pixel = draw_location({x = turtle.block.x, y = mine_enter_y, z = turtle.block.z}, colors.green)
+            if pixel then
+                special[pixel.x .. ',' .. pixel.y] = colors.green
             end
         end
     end
@@ -1031,17 +1015,21 @@ function draw_monitor()
     term.write('W')
     term.setCursorPos(elements.right.x, elements.right.y)
     term.write('E')
-    term.setCursorPos(elements.level_up.x, elements.level_up.y)
-    term.write('+')
-    term.setCursorPos(elements.level_down.x, elements.level_down.y)
-    term.write('-')
     term.setCursorPos(elements.zoom_in.x, elements.zoom_in.y)
     term.write('+')
     term.setCursorPos(elements.zoom_out.x, elements.zoom_out.y)
     term.write('-')
     term.setBackgroundColor(colors.brown)
+    local mined_count = 0
+    if state.mined_blocks then
+        for x, z_table in pairs(state.mined_blocks) do
+            for z, _ in pairs(z_table) do
+                mined_count = mined_count + 1
+            end
+        end
+    end
     term.setCursorPos(elements.level_indicator.x, elements.level_indicator.y)
-    term.write(string.format('LEVEL: %3d', monitor_level.y))
+    term.write(string.format('MINED: %4d', mined_count))
     term.setCursorPos(elements.zoom_indicator.x, elements.zoom_indicator.y)
     term.write('ZOOM: ' .. monitor_zoom_level)
     term.setCursorPos(elements.x_indicator.x, elements.x_indicator.y)
@@ -1070,12 +1058,6 @@ function touch_monitor(monitor_touch)
         monitor_location.x = monitor_location.x - zoom_factor
     elseif monitor_touch.x == elements.right.x and monitor_touch.y == elements.right.y then
         monitor_location.x = monitor_location.x + zoom_factor
-    elseif monitor_touch.x == elements.level_up.x and monitor_touch.y == elements.level_up.y then
-        monitor_level_index = math.min(monitor_level_index + 1, #config.mine_levels)
-        select_mine_level()
-    elseif monitor_touch.x == elements.level_down.x and monitor_touch.y == elements.level_down.y then
-        monitor_level_index = math.max(monitor_level_index - 1, 1)
-        select_mine_level()
     elseif monitor_touch.x == elements.zoom_in.x and monitor_touch.y == elements.zoom_in.y then
         monitor_zoom_level = math.max(monitor_zoom_level - 1, 0)
     elseif monitor_touch.x == elements.zoom_out.x and monitor_touch.y == elements.zoom_out.y then
@@ -1083,7 +1065,13 @@ function touch_monitor(monitor_touch)
     elseif monitor_touch.x == elements.menu.x and monitor_touch.y == elements.menu.y then
         menu()
     elseif monitor_touch.x == elements.center.x and monitor_touch.y == elements.center.y then
-        monitor_location = {x = config.default_monitor_location.x, z = config.default_monitor_location.z}
+        if config.mining_center then
+            monitor_location = {x = config.mining_center.x, z = config.mining_center.z}
+        elseif config.locations and config.locations.mine_enter then
+            monitor_location = {x = config.locations.mine_enter.x, z = config.locations.mine_enter.z}
+        else
+            monitor_location = {x = config.mine_entrance.x, z = config.mine_entrance.z}
+        end
     elseif monitor_touch.x == elements.all_turtles.x and monitor_touch.y == elements.all_turtles.y then
         local turtle_ids = {}
         for _, turtle in pairs(state.turtles) do
@@ -1169,9 +1157,6 @@ function init_elements()
 end
 
 
-function select_mine_level()
-    monitor_level = state.mine[config.mine_levels[monitor_level_index].level]
-end
 
 
 function step()
@@ -1237,23 +1222,6 @@ function main()
             term.redirect(monitor.restore_to)
         end
         sleep(0.5)
-    end
-    
-    monitor_level_index = 1
-    -- Safely select mine level with error handling
-    local status, err = pcall(select_mine_level)
-    if not status then
-        term.redirect(monitor)
-        term.setBackgroundColor(colors.black)
-        term.setTextColor(colors.red)
-        monitor.clear()
-        term.setCursorPos(1, 1)
-        print("Error initializing monitor:")
-        print(tostring(err))
-        print("")
-        print("Check config.mine_levels")
-        term.redirect(monitor.restore_to)
-        return
     end
     
     state.monitor_touches = {}
