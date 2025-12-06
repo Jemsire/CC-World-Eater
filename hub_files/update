@@ -31,6 +31,7 @@ local hub_files = {
     "hub_files/report.lua",
     "hub_files/user_input.lua",
     "hub_files/mine_manager.lua",
+    "hub_files/version.lua",
     "hub.lua",
 }
 
@@ -47,15 +48,164 @@ end
 print("========================================")
 print("  World Eater Hub Update")
 print("========================================")
-print("Downloading files from GitHub...")
-print("Repository: " .. GITHUB_REPO)
-print("")
 
 -- Determine drive path
 local drive_path = "/disk"
 if not fs.exists(drive_path) then
     error("No disk drive found!")
 end
+
+-- Function to format version table as string "MAJOR.MINOR.HOTFIX"
+local function format_version(version)
+    if version and type(version) == "table" then
+        return string.format("%d.%d.%d", version.major or 0, version.minor or 0, version.hotfix or 0)
+    end
+    return nil
+end
+
+-- Function to compare two semantic versions
+-- Returns: -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
+local function compare_versions(v1, v2)
+    if not v1 or not v2 or type(v1) ~= "table" or type(v2) ~= "table" then
+        return nil
+    end
+    
+    -- Compare major
+    if v1.major > v2.major then return 1 end
+    if v1.major < v2.major then return -1 end
+    
+    -- Compare minor
+    if v1.minor > v2.minor then return 1 end
+    if v1.minor < v2.minor then return -1 end
+    
+    -- Compare hotfix
+    if v1.hotfix > v2.hotfix then return 1 end
+    if v1.hotfix < v2.hotfix then return -1 end
+    
+    return 0  -- Equal
+end
+
+-- Function to get local version
+local function get_local_version()
+    local version_paths = {
+        "/version.lua",
+        "/disk/hub_files/version.lua",
+        drive_path .. "/hub_files/version.lua"
+    }
+    
+    for _, path in ipairs(version_paths) do
+        if fs.exists(path) then
+            local version_file = fs.open(path, "r")
+            if version_file then
+                local version_code = version_file.readAll()
+                version_file.close()
+                local version_func = load(version_code)
+                if version_func then
+                    local success, version = pcall(version_func)
+                    if success and version and type(version) == "table" then
+                        return version
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- Function to get remote version from GitHub
+local function get_remote_version()
+    local url = GITHUB_BASE .. "/hub_files/version.lua"
+    local response = http.get(url)
+    if response then
+        local content = response.readAll()
+        response.close()
+        local version_func = load(content)
+        if version_func then
+            local success, version = pcall(version_func)
+            if success and version and type(version) == "table" then
+                return version
+            end
+        end
+    end
+    return nil
+end
+
+-- Check versions BEFORE updating - this must happen first!
+print("Checking for updates...")
+local local_version = get_local_version()
+local remote_version = get_remote_version()
+
+-- Must have remote version to proceed
+if not remote_version then
+    print("")
+    print("ERROR: Cannot check remote version from GitHub!")
+    print("Please check your internet connection and try again.")
+    return
+end
+
+local local_str = format_version(local_version)
+local remote_str = format_version(remote_version)
+
+print("Current version: " .. (local_str or "not found"))
+print("Remote version: " .. (remote_str or "unknown"))
+print("")
+
+-- If we have local version, check if update is needed
+if local_version then
+    local comparison = compare_versions(local_version, remote_version)
+    if comparison and comparison >= 0 then
+        print("Already up-to-date! No update needed.")
+        print("(Use 'update force-config' to force update)")
+        return
+    end
+    
+    -- Check if this is a major version update
+    local is_major_update = false
+    if remote_version.major > (local_version.major or 0) then
+        is_major_update = true
+    end
+    
+    -- Prompt for major version updates
+    if is_major_update then
+        print("========================================")
+        print("  MAJOR VERSION UPDATE DETECTED")
+        print("========================================")
+        print("You are updating from " .. local_str .. " to " .. remote_str)
+        print("")
+        print("WARNING: Major version updates may include:")
+        print("  - Breaking changes to configuration files")
+        print("  - Changes to file structure or locations")
+        print("  - Incompatible changes requiring manual intervention")
+        print("  - Changes that may affect turtle compatibility")
+        print("")
+        print("It is recommended to:")
+        print("  - Backup your current configuration")
+        print("  - Review the changelog/release notes")
+        print("  - Update config files manually if needed")
+        print("")
+        print("Do you want to proceed with this major update?")
+        print("Type 'yes' to continue, anything else to cancel:")
+        print("")
+        
+        -- Read user input
+        local user_input = read()
+        if user_input ~= "yes" then
+            print("")
+            print("Update cancelled by user.")
+            return
+        end
+        print("")
+        print("Proceeding with major version update...")
+        print("")
+    end
+else
+    print("Local version not found - proceeding with fresh install...")
+    print("")
+end
+
+print("Downloading files from GitHub...")
+print("Repository: " .. GITHUB_REPO)
+print("")
 
 local updated_count = 0
 local skipped_count = 0
@@ -154,6 +304,40 @@ end
 if error_count > 0 then
     print(string.format("  Errors: %d files", error_count))
 end
+
+-- Update version to match remote version after successful update
+if updated_count > 0 and error_count == 0 and remote_version then
+    -- Set version to match the remote version we just downloaded
+    local new_version = {
+        major = remote_version.major or 1,
+        minor = remote_version.minor or 0,
+        hotfix = remote_version.hotfix or 0
+    }
+    
+    local version_path = drive_path .. "/hub_files/version.lua"
+    
+    -- Create directory if needed
+    local dir = string.match(version_path, "^(.-)[^/\\]*$")
+    if dir and dir ~= "" then
+        fs.makeDir(dir)
+    end
+    
+    local version_file = fs.open(version_path, "w")
+    if version_file then
+        version_file.write("-- World Eater Hub Version\n")
+        version_file.write("-- This version number matches the version from GitHub\n")
+        version_file.write("-- Version format: semantic versioning MAJOR.MINOR.HOTFIX\n")
+        version_file.write("-- Returns: {major=1, minor=0, hotfix=0}\n")
+        version_file.write("return {\n")
+        version_file.write("    major = " .. tostring(new_version.major) .. ",\n")
+        version_file.write("    minor = " .. tostring(new_version.minor) .. ",\n")
+        version_file.write("    hotfix = " .. tostring(new_version.hotfix) .. "\n")
+        version_file.write("}\n")
+        version_file.close()
+        print(string.format("  Version updated to: %s", format_version(new_version)))
+    end
+end
+
 print("")
 print("Running hub.lua to copy files to root...")
 sleep(1)

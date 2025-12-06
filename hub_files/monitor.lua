@@ -766,6 +766,43 @@ function statistics_viewer()
 end
 
 
+function get_version()
+    -- Load version from version.lua file
+    local version_file_path = "/version.lua"
+    if not fs.exists(version_file_path) then
+        version_file_path = "/disk/hub_files/version.lua"
+    end
+    if not fs.exists(version_file_path) then
+        return nil
+    end
+    
+    local version_file = fs.open(version_file_path, "r")
+    if not version_file then
+        return nil
+    end
+    
+    local version_code = version_file.readAll()
+    version_file.close()
+    
+    -- Execute version code in a safe environment
+    local version_func = load(version_code)
+    if version_func then
+        local success, version = pcall(version_func)
+        if success and version and type(version) == "table" then
+            return version
+        end
+    end
+    return nil
+end
+
+function format_version(version)
+    -- Format version table as "MAJOR.MINOR.HOTFIX"
+    if version and type(version) == "table" then
+        return string.format("%d.%d.%d", version.major or 0, version.minor or 0, version.hotfix or 0)
+    end
+    return nil
+end
+
 function menu()
     term.redirect(monitor)
     
@@ -806,6 +843,18 @@ function menu()
         term.setTextColor(colors.white)
         term.setCursorPos(elements.menu_title.x, elements.menu_title.y)
         term.write('WORLD')
+        
+        -- Display version number
+        local version = get_version()
+        if version then
+            local version_str = format_version(version)
+            if version_str then
+                term.setCursorPos(elements.menu_title.x, elements.menu_title.y + 7)
+                term.setTextColor(colors.gray)
+                term.write("v" .. version_str)
+                term.setTextColor(colors.white)
+            end
+        end
         
         for y_offset, line in pairs(menu_lines) do
             term.setCursorPos(elements.menu_title.x, elements.menu_title.y + y_offset)
