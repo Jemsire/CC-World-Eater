@@ -1,9 +1,9 @@
 menu_lines = {
-    '##### #   # ##### ##### #####',
-    '#     #   # #     #     #   #',
-    '###   #   # ###   ###   #####',
-    '#     #   # #     #     #   #',
-    '##### ##### ##### ##### #   #',
+    '##### ##### ##### ##### #####',
+    '#     #   #   #   #     #   #',
+    '###   #####   #   ###   ###  ',
+    '#     #   #   #   #     #  # ',
+    '##### #   #   #   ##### #   #',
 }
 
 decimals = {
@@ -805,7 +805,7 @@ function menu()
         
         term.setTextColor(colors.white)
         term.setCursorPos(elements.menu_title.x, elements.menu_title.y)
-        term.write('EATER')
+        term.write('WORLD')
         
         for y_offset, line in pairs(menu_lines) do
             term.setCursorPos(elements.menu_title.x, elements.menu_title.y + y_offset)
@@ -1144,7 +1144,7 @@ function init_elements()
         turtle_dig_up    = {x = 31, y = 16},
         turtle_dig       = {x = 31, y = 17},
         turtle_dig_down  = {x = 31, y = 18},
-        menu_title       = {x =  9, y =  3},
+        menu_title       = {x =  7, y =  3},
         menu_toggle      = {x = 10, y = 11},
         menu_update      = {x = 10, y = 13},
         menu_return      = {x = 10, y = 14},
