@@ -1,0 +1,26 @@
+hub_id = tonumber(fs.open('/hub_id', 'r').readAll())
+
+print('Sending update request...')
+-- WORLD EATER: Check both disk and disk2 for turtle files
+-- Try disk2 first (if dual-drive setup), then fall back to disk
+local turtle_files_path = '/disk2/turtle_files/'
+if not fs.exists(turtle_files_path) then
+    turtle_files_path = '/disk/turtle_files/'
+end
+
+rednet.send(hub_id, turtle_files_path, 'update_request')
+local sender, message, protocal = rednet.receive('update_package')
+
+for _, file_name in pairs(fs.list('/')) do
+    if file_name ~= 'rom' and file_name ~= 'persistent' and file_name ~= 'disk' and file_name ~= 'disk2' then
+        fs.delete(file_name)
+    end
+end
+
+for file_name, file_contents in pairs(message) do
+    file = fs.open(file_name, 'w')
+    file.write(file_contents)
+    file.close()
+end
+
+os.reboot()
