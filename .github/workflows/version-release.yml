@@ -65,16 +65,46 @@ jobs:
           TAG="${{ steps.version.outputs.tag }}"
           VERSION="${{ steps.version.outputs.version }}"
 
-          CHANGELOG_CONTENT=$(cat CHANGELOG.md)
+          echo "Creating release with TAG=$TAG, VERSION=$VERSION"
 
-          # Build notes without heredoc
-          NOTES=$(printf "### Version %s\n\n#### Changes\n%s\n\nAutomatically generated from commit history, including authors.\n" \
-            "$VERSION" "$CHANGELOG_CONTENT")
-
-          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${TAG} --jq '.id' 2>/dev/null || echo "")
-
-          if [ -z "$RELEASE_ID" ]; then
-            gh release create "$TAG" --title "v${VERSION}" --notes "$NOTES" --latest
+          # Read changelog, handle empty file
+          if [ -f CHANGELOG.md ] && [ -s CHANGELOG.md ]; then
+            CHANGELOG_CONTENT=$(cat CHANGELOG.md)
           else
-            gh release edit "$TAG" --title "v${VERSION}" --notes "$NOTES" --latest
+            CHANGELOG_CONTENT="No changes recorded."
           fi
+
+          # Write notes to a temp file to avoid shell escaping issues
+          NOTES_FILE=$(mktemp)
+          {
+            echo "### Version ${VERSION}"
+            echo ""
+            echo "#### Changes"
+            echo "${CHANGELOG_CONTENT}"
+            echo ""
+            echo "---"
+            echo "*Automatically generated from commit history.*"
+          } > "$NOTES_FILE"
+
+          echo "Checking if release exists..."
+          set +e
+          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${TAG} --jq '.id' 2>/dev/null)
+          RELEASE_CHECK_EXIT=$?
+          set -e
+
+          if [ $RELEASE_CHECK_EXIT -ne 0 ] || [ -z "$RELEASE_ID" ]; then
+            echo "Creating new release: $TAG"
+            gh release create "$TAG" \
+              --title "v${VERSION}" \
+              --notes-file "$NOTES_FILE" \
+              --latest
+          else
+            echo "Updating existing release: $TAG (ID: $RELEASE_ID)"
+            gh release edit "$TAG" \
+              --title "v${VERSION}" \
+              --notes-file "$NOTES_FILE" \
+              --latest
+          fi
+          
+          rm -f "$NOTES_FILE"
+          echo "Release created/updated successfully!"
