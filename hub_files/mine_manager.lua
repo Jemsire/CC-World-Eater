@@ -630,31 +630,60 @@ function user_input(input)
                 add_task(turtle, {action = 'pass'})
             end
         elseif command == 'shutdown' then
-            -- REBOOT TURTLE
-            for _, turtle in pairs(turtles) do
-                turtle.tasks = {}
-                add_task(turtle, {action = 'pass'})
-                rednet.send(turtle.id, {
-                    action = 'shutdown',
-                }, 'mastermine')
+            -- SHUTDOWN TURTLE(S) OR HUB
+            if turtle_id_string then
+                -- Shutdown specific turtle(s)
+                for _, turtle in pairs(turtles) do
+                    turtle.tasks = {}
+                    add_task(turtle, {action = 'pass'})
+                    rednet.send(turtle.id, {
+                        action = 'shutdown',
+                    }, 'mastermine')
+                end
+            else
+                -- Shutdown hub
+                os.shutdown()
             end
         elseif command == 'reboot' then
-            -- REBOOT TURTLE
-            for _, turtle in pairs(turtles) do
-                turtle.tasks = {}
-                add_task(turtle, {action = 'pass'})
-                rednet.send(turtle.id, {
-                    action = 'reboot',
-                }, 'mastermine')
+            -- REBOOT TURTLE(S) OR HUB
+            if turtle_id_string then
+                -- Reboot specific turtle(s)
+                for _, turtle in pairs(turtles) do
+                    turtle.tasks = {}
+                    add_task(turtle, {action = 'pass'})
+                    rednet.send(turtle.id, {
+                        action = 'reboot',
+                    }, 'mastermine')
+                end
+            else
+                -- Reboot hub
+                os.reboot()
             end
         elseif command == 'update' then
-            -- FEED TURTLE DINNER
-            for _, turtle in pairs(turtles) do
-                turtle.tasks = {}
-                add_task(turtle, {action = 'pass'})
-                rednet.send(turtle.id, {
-                    action = 'update',
-                }, 'mastermine')
+            -- UPDATE TURTLES AND/OR HUB
+            if turtle_id_string then
+                -- Update specific turtle(s)
+                for _, turtle in pairs(turtles) do
+                    turtle.tasks = {}
+                    add_task(turtle, {action = 'pass'})
+                    rednet.send(turtle.id, {
+                        action = 'update',
+                    }, 'mastermine')
+                end
+            else
+                -- Update hub and all turtles
+                print('Updating hub and all turtles...')
+                -- First update all turtles
+                for _, turtle in pairs(state.turtles) do
+                    turtle.tasks = {}
+                    add_task(turtle, {action = 'pass'})
+                    rednet.send(turtle.id, {
+                        action = 'update',
+                    }, 'mastermine')
+                end
+                -- Then update hub
+                sleep(1)  -- Brief delay to let turtle update commands send
+                os.run({}, '/update')
             end
         elseif command == 'return' then
             -- BRING TURTLE HOME
@@ -699,21 +728,6 @@ function user_input(input)
                 end
                 state.on = nil
                 fs.delete(state.mine_dir_path .. 'on')
-            end
-        elseif command == 'hubshutdown' then
-            -- STANDBY MINING NETWORK
-            if not turtle_id_string then
-                os.shutdown()
-            end
-        elseif command == 'hubreboot' then
-            -- STANDBY MINING NETWORK
-            if not turtle_id_string then
-                os.reboot()
-            end
-        elseif command == 'hubupdate' then
-            -- STANDBY MINING NETWORK
-            if not turtle_id_string then
-                os.run({}, '/update')
             end
         elseif command == 'debug' then
             -- DEBUG

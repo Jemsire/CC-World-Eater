@@ -396,6 +396,25 @@ end
 
 
 function go_to_mine_enter()
+    -- Navigate to mine_enter from current location
+    -- First check if we're already at mine_enter
+    if basics.in_location({x = state.location.x, y = state.location.y, z = state.location.z}, config.locations.mine_enter) then
+        return true
+    end
+    
+    -- If in waiting room area, use the route
+    if basics.in_area(state.location, config.locations.waiting_room_area) then
+        if not go_route(config.locations.waiting_room_to_mine_enter_route) then return false end
+        return true
+    end
+    
+    -- Otherwise, navigate to waiting room first, then to mine_enter
+    if not basics.in_area(state.location, config.locations.waiting_room_line_area) then
+        if not go_to_home() then return false end
+    end
+    if not go_to_waiting_room() then return false end
+    
+    -- Now use the route from waiting room to mine_enter
     if not go_route(config.locations.waiting_room_to_mine_enter_route) then return false end
     return true
 end
@@ -770,9 +789,23 @@ function go_to_block(block)
     
     -- Get surface level (mining_center.y + 2)
     local surface_y = config.locations.mining_center.y + 2
+    local target_location = {x = block.x, y = surface_y, z = block.z}
+    
+    -- Check if already at target
+    if state.location.x == target_location.x and 
+       state.location.y == target_location.y and 
+       state.location.z == target_location.z then
+        return true
+    end
+    
+    -- If not at mine_enter, navigate there first
+    if not basics.in_location({x = state.location.x, y = state.location.y, z = state.location.z}, config.locations.mine_enter) then
+        if not go_to_mine_enter() then return false end
+    end
     
     -- Navigate to block position at surface level
-    if not go_to({x = block.x, y = surface_y, z = block.z}, nil, config.paths.mine_enter_to_block) then
+    -- Use 'yxz' path: Y first (vertical), then X, then Z
+    if not go_to(target_location, nil, 'yxz') then
         return false
     end
     
@@ -794,9 +827,23 @@ function go_to_block_offset(block, z_offset)
     
     -- Get surface level (mining_center.y + 2)
     local surface_y = config.locations.mining_center.y + 2
+    local target_location = {x = block.x, y = surface_y, z = block.z + z_offset}
+    
+    -- Check if already at target
+    if state.location.x == target_location.x and 
+       state.location.y == target_location.y and 
+       state.location.z == target_location.z then
+        return true
+    end
+    
+    -- If not at mine_enter, navigate there first
+    if not basics.in_location({x = state.location.x, y = state.location.y, z = state.location.z}, config.locations.mine_enter) then
+        if not go_to_mine_enter() then return false end
+    end
     
     -- Navigate to block position at surface level with offset
-    if not go_to({x = block.x, y = surface_y, z = block.z + z_offset}, nil, config.paths.mine_enter_to_block) then
+    -- Use 'yxz' path: Y first (vertical), then X, then Z
+    if not go_to(target_location, nil, 'yxz') then
         return false
     end
     

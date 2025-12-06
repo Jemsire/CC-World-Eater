@@ -75,9 +75,9 @@ Control your World Eater system with these commands:
 - `return <#>` - Return a turtle to base
 
 ### Hub Control
-- `hubupdate` - Update hub computer code
-- `hubreboot` - Reboot hub computer
-- `hubshutdown` - Shutdown hub computer
+- `update` - Update hub computer code and all turtles (when run without turtle ID)
+- `reboot` - Reboot hub computer (when run without turtle ID)
+- `shutdown` - Shutdown hub computer (when run without turtle ID)
 
 > **Tip:** Use `*` as notation for all turtles (e.g., `reboot *` reboots all turtles)
 
@@ -85,9 +85,16 @@ Control your World Eater system with these commands:
 
 All systems can be updated directly from the GitHub repository. Updates automatically preserve your configuration files.
 
-### Hub Computer Update
+### Hub Computer Update (Updates Hub + All Turtles)
 
-From the hub computer, run:
+From the hub computer, simply type:
+```
+update
+```
+
+This will update both the hub computer and all connected turtles automatically.
+
+To update via the update script directly (hub only):
 ```lua
 disk/hub_files/update
 ```
