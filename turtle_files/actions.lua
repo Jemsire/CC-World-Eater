@@ -780,6 +780,47 @@ function go_to_block(block)
 end
 
 
+function go_to_block_offset(block, z_offset)
+    -- Navigate to assigned block (x, z) at surface level with a Z offset
+    -- block = {x = x, z = z}
+    -- z_offset: positive = south, negative = north
+    if not block or not block.x or not block.z then
+        return false
+    end
+    
+    if not z_offset then
+        z_offset = 0
+    end
+    
+    -- Get surface level (mining_center.y + 2)
+    local surface_y = config.locations.mining_center.y + 2
+    
+    -- Navigate to block position at surface level with offset
+    if not go_to({x = block.x, y = surface_y, z = block.z + z_offset}, nil, config.paths.mine_enter_to_block) then
+        return false
+    end
+    
+    return true
+end
+
+
+function follow_mining_turtle(target_location)
+    -- Follow the mining turtle, staying 2 blocks above it
+    -- target_location = {x = x, y = y, z = z} where chunky turtle should be (2 blocks above mining turtle)
+    if not target_location or not target_location.x or not target_location.y or not target_location.z then
+        return false
+    end
+    
+    -- Navigate to target location (same X, Z as mining turtle, but Y+2)
+    -- Use 'yxz' path to prioritize vertical movement
+    if not go_to(target_location, nil, 'yxz') then
+        return false
+    end
+    
+    return true
+end
+
+
 function detect_bedrock(direction)
     -- Check if block below is bedrock
     -- direction should be 'down' for world eater

@@ -403,9 +403,10 @@ function pair_turtles_send(chunky_turtle)
         end_function = pair_turtles_finish
     })
     
+    -- Chunky turtle should be one block south of mining turtle
     add_task(chunky_turtle, {
-        action = 'go_to_block',
-        data = {chunky_turtle.block},
+        action = 'go_to_block_offset',
+        data = {chunky_turtle.block, 1},  -- 1 block south (positive Z)
         end_state = 'wait',
     })
 end
@@ -454,6 +455,12 @@ end
 function go_mine(mining_turtle)
     -- Mines assigned block down to bedrock
     update_block(mining_turtle)
+    
+    if config.use_chunky_turtles then
+        -- Set chunky turtle to follow state so it follows during mining
+        add_task(mining_turtle.pair, {action = 'pass', end_state = 'following'})
+    end
+    
     add_task(mining_turtle, {
         action = 'mine_to_bedrock',
         data = {mining_turtle.block},
@@ -483,9 +490,25 @@ end
 
 
 function follow(chunky_turtle)
+    -- After mining completes, chunky turtle returns to surface and positions at block
+    -- (one block south for next mining operation)
+    -- First transition out of following state and return to surface
+    add_task(chunky_turtle, {action = 'pass', end_state = 'trip'})
+    
+    -- Return to surface if deep underground
+    local surface_y = config.locations.mining_center.y + 2
+    if chunky_turtle.data and chunky_turtle.data.location and chunky_turtle.data.location.y < surface_y then
+        -- Need to return to surface first
+        add_task(chunky_turtle, {
+            action = 'mine_column_up',
+            data = {surface_y},
+        })
+    end
+    
+    -- Then position one block south of mining turtle at surface
     add_task(chunky_turtle, {
-        action = 'go_to_block',
-        data = {chunky_turtle.block},
+        action = 'go_to_block_offset',
+        data = {chunky_turtle.block, 1},  -- 1 block south (positive Z)
         end_state = 'wait',
     })
 end
@@ -785,6 +808,41 @@ function command_turtles()
                         solo_turtle_begin(turtle)
                     end
 
+                elseif turtle.state == 'trip' then
+                    -- TURTLE IS TRAVELING TO BLOCK
+                    -- If turtle has no tasks but has a block assignment, ensure it continues navigation
+                    if turtle.block and (#turtle.tasks == 0) then
+                        -- Check if this is a chunky turtle that should wait for pair_turtles_send callback
+                        -- But if mining turtle is already at wait state, the callback may have been missed
+                        if turtle.pair and turtle.data.turtle_type == 'chunky' and turtle.pair.state == 'wait' then
+                            -- Mining turtle is already at block, add tasks for chunky turtle to catch up
+                            add_task(turtle, {
+                                action = 'go_to_mine_enter',
+                                end_function = pair_turtles_finish
+                            })
+                            -- Chunky turtle should be one block south of mining turtle
+                            add_task(turtle, {
+                                action = 'go_to_block_offset',
+                                data = {turtle.block, 1},  -- 1 block south (positive Z)
+                                end_state = 'wait',
+                            })
+                        elseif not turtle.pair or turtle.data.turtle_type == 'mining' then
+                            -- Mining turtle or solo turtle - continue to block
+                            if not basics.in_area(turtle.data.location, config.locations.waiting_room_area) then
+                                add_task(turtle, {action = 'go_to_mine_enter'})
+                            end
+                            add_task(turtle, {
+                                action = 'go_to_block',
+                                data = {turtle.block},
+                                end_state = 'wait',
+                            })
+                        end
+                        -- If chunky turtle and mining turtle not at wait yet, wait for pair_turtles_send callback
+                    elseif not turtle.block then
+                        -- No block assignment, go idle
+                        add_task(turtle, {action = 'pass', end_state = 'idle'})
+                    end
+
                 elseif turtle.state == 'wait' then
                     -- TURTLE GO DO SOME WORK
                     if turtle.block then
@@ -820,6 +878,43 @@ function command_turtles()
                     end
                 elseif turtle.state == 'mine' then
                     if config.use_chunky_turtles and not turtle.pair then
+                        add_task(turtle, {action = 'pass', end_state = 'idle'})
+                    end
+                    
+                elseif turtle.state == 'following' then
+                    -- CHUNKY TURTLE FOLLOWING MINING TURTLE
+                    -- Keep chunky turtle 2 blocks above mining turtle during mining
+                    if turtle.pair and turtle.pair.data and turtle.pair.data.location then
+                        local mining_location = turtle.pair.data.location
+                        local target_location = {
+                            x = mining_location.x,
+                            y = mining_location.y + 2,  -- 2 blocks above
+                            z = mining_location.z
+                        }
+                        
+                        -- Check if chunky turtle needs to move
+                        if turtle.data and turtle.data.location then
+                            local current = turtle.data.location
+                            -- If not at target position, move there
+                            if current.x ~= target_location.x or 
+                               current.y ~= target_location.y or 
+                               current.z ~= target_location.z then
+                                add_task(turtle, {
+                                    action = 'follow_mining_turtle',
+                                    data = {target_location},
+                                    end_state = 'following',  -- Stay in following state
+                                })
+                            end
+                        else
+                            -- No location data, try to get there anyway
+                            add_task(turtle, {
+                                action = 'follow_mining_turtle',
+                                data = {target_location},
+                                end_state = 'following',
+                            })
+                        end
+                    else
+                        -- No pair or no location data, go idle
                         add_task(turtle, {action = 'pass', end_state = 'idle'})
                     end
                 end
