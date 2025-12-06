@@ -25,14 +25,25 @@ jobs:
           # Read the version.lua file and extract version numbers
           VERSION_FILE="hub_files/version.lua"
           
-          # Extract major, minor, and hotfix using grep and sed
-          MAJOR=$(grep -oP 'major\s*=\s*\K\d+' "$VERSION_FILE" || echo "0")
-          MINOR=$(grep -oP 'minor\s*=\s*\K\d+' "$VERSION_FILE" || echo "0")
-          HOTFIX=$(grep -oP 'hotfix\s*=\s*\K\d+' "$VERSION_FILE" || echo "0")
+          # Extract major, minor, and hotfix using sed (more portable than grep -P)
+          MAJOR=$(sed -n 's/.*major\s*=\s*\([0-9]*\).*/\1/p' "$VERSION_FILE" | head -n1)
+          MINOR=$(sed -n 's/.*minor\s*=\s*\([0-9]*\).*/\1/p' "$VERSION_FILE" | head -n1)
+          HOTFIX=$(sed -n 's/.*hotfix\s*=\s*\([0-9]*\).*/\1/p' "$VERSION_FILE" | head -n1)
+          
+          # Default to 0 if not found
+          MAJOR=${MAJOR:-0}
+          MINOR=${MINOR:-0}
+          HOTFIX=${HOTFIX:-0}
+          
+          # Validate that we got numeric values
+          if ! [[ "$MAJOR" =~ ^[0-9]+$ ]] || ! [[ "$MINOR" =~ ^[0-9]+$ ]] || ! [[ "$HOTFIX" =~ ^[0-9]+$ ]]; then
+            echo "Error: Invalid version numbers parsed. MAJOR=$MAJOR, MINOR=$MINOR, HOTFIX=$HOTFIX"
+            exit 1
+          fi
           
           VERSION="${MAJOR}.${MINOR}.${HOTFIX}"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Parsed version: $VERSION"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Parsed version: ${VERSION}"
       
       - name: Create or update release
         run: |
