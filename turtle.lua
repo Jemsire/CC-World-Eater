@@ -29,6 +29,28 @@ file = fs.open('/hub_id', 'w')
 file.write(hub_id)
 file.close()
 
+-- Create update wrapper script in root so "update" command works
+local update_wrapper = fs.open('/update', 'w')
+if update_wrapper then
+    update_wrapper.write([[
+-- Update wrapper - runs the update script from disk
+local turtle_files_path = '/disk2/turtle_files'
+if not fs.exists(turtle_files_path) then
+    turtle_files_path = '/disk/turtle_files'
+end
+
+if fs.exists(turtle_files_path .. '/update') then
+    shell.run(turtle_files_path .. '/update', ...)
+elseif fs.exists('/update') then
+    shell.run('/update', ...)
+else
+    print('Update script not found!')
+    print('Run: disk/turtle_files/update or disk2/turtle_files/update')
+end
+]])
+    update_wrapper.close()
+end
+
 -- Create startup file to automatically run startup.lua on boot
 -- (startup.lua is already copied from turtle_files by this script)
 local startup_file = fs.open('/startup', 'w')

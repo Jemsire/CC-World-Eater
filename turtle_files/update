@@ -147,6 +147,39 @@ if error_count > 0 then
     print(string.format("  Errors: %d files", error_count))
 end
 print("")
-print("Rebooting to apply changes...")
-sleep(2)
-os.reboot()
+print("Running turtle.lua to copy files to root...")
+sleep(1)
+
+-- Run turtle.lua to copy updated files from disk to root
+-- Determine drive path (check disk2 first, fall back to disk)
+local drive_path = "/disk2"
+if not fs.exists(drive_path) then
+    drive_path = "/disk"
+end
+
+local turtle_lua_path = drive_path .. "/turtle.lua"
+if fs.exists(turtle_lua_path) then
+    -- Use os.run to execute turtle.lua, which will handle copying files and rebooting
+    -- We need to pass the hub_id, so we'll read it from /hub_id if it exists
+    local hub_id = nil
+    if fs.exists("/hub_id") then
+        local hub_id_file = fs.open("/hub_id", "r")
+        if hub_id_file then
+            hub_id = hub_id_file.readAll()
+            hub_id_file.close()
+        end
+    end
+    
+    if hub_id then
+        os.run({hub_id}, turtle_lua_path)
+    else
+        print("Warning: hub_id not found, running turtle.lua without hub_id...")
+        print("You may need to manually run: disk/turtle.lua <hub_id>")
+        os.run({}, turtle_lua_path)
+    end
+else
+    print("Warning: turtle.lua not found, rebooting anyway...")
+    print("You may need to manually run: disk/turtle.lua <hub_id>")
+    sleep(2)
+    os.reboot()
+end
