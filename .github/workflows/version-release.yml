@@ -6,74 +6,84 @@ on:
       - main
       - master
     paths:
-      - 'hub_files/version.lua'
-  workflow_dispatch: # Allow manual triggering
+      - "hub_files/version.lua"
+  workflow_dispatch:
 
 jobs:
   create-release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
-      - name: Parse version from version.lua
-        id: parse_version
+        with:
+          fetch-depth: 0   # Needed for commit history
+
+      - name: Install GitHub CLI
         run: |
-          # Read the version.lua file and extract version numbers
-          VERSION_FILE="hub_files/version.lua"
-          
-          # Extract major, minor, and hotfix using sed (more portable than grep -P)
-          MAJOR=$(sed -n 's/.*major\s*=\s*\([0-9]*\).*/\1/p' "$VERSION_FILE" | head -n1)
-          MINOR=$(sed -n 's/.*minor\s*=\s*\([0-9]*\).*/\1/p' "$VERSION_FILE" | head -n1)
-          HOTFIX=$(sed -n 's/.*hotfix\s*=\s*\([0-9]*\).*/\1/p' "$VERSION_FILE" | head -n1)
-          
-          # Default to 0 if not found
-          MAJOR=${MAJOR:-0}
-          MINOR=${MINOR:-0}
-          HOTFIX=${HOTFIX:-0}
-          
-          # Validate that we got numeric values
-          if ! [[ "$MAJOR" =~ ^[0-9]+$ ]] || ! [[ "$MINOR" =~ ^[0-9]+$ ]] || ! [[ "$HOTFIX" =~ ^[0-9]+$ ]]; then
-            echo "Error: Invalid version numbers parsed. MAJOR=$MAJOR, MINOR=$MINOR, HOTFIX=$HOTFIX"
-            exit 1
-          fi
-          
+          sudo apt-get update
+          sudo apt-get install -y gh
+
+      - name: Parse version.lua
+        id: version
+        run: |
+          VF="hub_files/version.lua"
+
+          MAJOR=$(grep -v '^\s*--' "$VF" | grep -E 'major\s*=' | sed -E 's/.*major[[:space:]]*=[[:space:]]*([0-9]+).*/\1/')
+          MINOR=$(grep -v '^\s*--' "$VF" | grep -E 'minor\s*=' | sed -E 's/.*minor[[:space:]]*=[[:space:]]*([0-9]+).*/\1/')
+          HOTFIX=$(grep -v '^\s*--' "$VF" | grep -V '^\s*--' | grep -E 'hotfix\s*=' | sed -E 's/.*hotfix[[:space:]]*=[[:space:]]*([0-9]+).*/\1/')
+
           VERSION="${MAJOR}.${MINOR}.${HOTFIX}"
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Parsed version: ${VERSION}"
-      
-      - name: Create or update release
+          echo "tag=v${VERSION}"
+
+      - name: Determine previous tag
+        id: prev
         run: |
-          VERSION="${{ steps.parse_version.outputs.version }}"
-          TAG="v${VERSION}"
-          
-          # Check if release already exists
-          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${TAG} --jq '.id' 2>/dev/null || echo "")
-          
-          if [ -z "$RELEASE_ID" ]; then
-            # Create new release
-            gh release create "${TAG}" \
-              --title "v${VERSION}" \
-              --notes "Auto-generated release from version.lua
+          PREV=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "previous=${PREV}" >> $GITHUB_OUTPUT
+          echo "Previous tag: $PREV"
 
-              Version: **${VERSION}**
-              
-              This release was automatically created from \`hub_files/version.lua\`." \
-              --latest
+      - name: Generate changelog (with authors)
+        id: changelog
+        run: |
+          NEW_TAG="${{ steps.version.outputs.tag }}"
+          OLD_TAG="${{ steps.prev.outputs.previous }}"
+
+          echo "Generating changelog from $OLD_TAG to $NEW_TAG"
+
+          if [ -z "$OLD_TAG" ]; then
+            echo "No previous tag; generating from full history."
+            git log --pretty=format:"- %s (%h) — by %an" > CHANGELOG.md
           else
-            # Update existing release
-            gh release edit "${TAG}" \
-              --title "v${VERSION}" \
-              --notes "Auto-generated release from version.lua
+            git log "$OLD_TAG"..HEAD --pretty=format:"- %s (%h) — by %an" > CHANGELOG.md
+          fi
 
-              Version: **${VERSION}**
-              
-              This release was automatically created from \`hub_files/version.lua\`." \
-              --latest
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          cat CHANGELOG.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create or Update Release
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          CHANGELOG="${{ steps.changelog.outputs.changelog }}"
+
+          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${TAG} --jq '.id' 2>/dev/null || echo "")
+
+          NOTES="### Version ${VERSION}
+
+#### Changes  
+${CHANGELOG}
+
+Automatically generated from commit history, including authors."
+
+          if [ -z "$RELEASE_ID" ]; then
+            gh release create "$TAG" --title "v${VERSION}" --notes "$NOTES" --latest
+          else
+            gh release edit "$TAG" --title "v${VERSION}" --notes "$NOTES" --latest
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
