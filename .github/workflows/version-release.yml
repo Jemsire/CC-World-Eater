@@ -1,0 +1,68 @@
+name: Auto Version Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'hub_files/version.lua'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Parse version from version.lua
+        id: parse_version
+        run: |
+          # Read the version.lua file and extract version numbers
+          VERSION_FILE="hub_files/version.lua"
+          
+          # Extract major, minor, and hotfix using grep and sed
+          MAJOR=$(grep -oP 'major\s*=\s*\K\d+' "$VERSION_FILE" || echo "0")
+          MINOR=$(grep -oP 'minor\s*=\s*\K\d+' "$VERSION_FILE" || echo "0")
+          HOTFIX=$(grep -oP 'hotfix\s*=\s*\K\d+' "$VERSION_FILE" || echo "0")
+          
+          VERSION="${MAJOR}.${MINOR}.${HOTFIX}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Parsed version: $VERSION"
+      
+      - name: Create or update release
+        run: |
+          VERSION="${{ steps.parse_version.outputs.version }}"
+          TAG="v${VERSION}"
+          
+          # Check if release already exists
+          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${TAG} --jq '.id' 2>/dev/null || echo "")
+          
+          if [ -z "$RELEASE_ID" ]; then
+            # Create new release
+            gh release create "${TAG}" \
+              --title "v${VERSION}" \
+              --notes "Auto-generated release from version.lua
+
+              Version: **${VERSION}**
+              
+              This release was automatically created from \`hub_files/version.lua\`." \
+              --latest
+          else
+            # Update existing release
+            gh release edit "${TAG}" \
+              --title "v${VERSION}" \
+              --notes "Auto-generated release from version.lua
+
+              Version: **${VERSION}**
+              
+              This release was automatically created from \`hub_files/version.lua\`." \
+              --latest
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
