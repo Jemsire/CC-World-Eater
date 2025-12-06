@@ -140,7 +140,8 @@ local function parse_json_simple(json_str)
     for obj_match in string.gmatch(tree_array, '{[^}]+}') do
         local path = string.match(obj_match, '"path"%s*:%s*"([^"]+)"')
         local obj_type = string.match(obj_match, '"type"%s*:%s*"([^"]+)"')
-        if path and obj_type == "file" then
+        -- GitHub API returns "blob" for files and "tree" for directories
+        if path and obj_type == "blob" then
             table.insert(filtered, path)
         end
         i = i + 1
@@ -187,9 +188,10 @@ local function download_file_list()
     end
     
     -- Group files by folder prefix
+    -- GitHub API returns "blob" for files and "tree" for directories
     local file_lists = {}
     for _, item in ipairs(json_data.tree) do
-        if item.type == "file" and item.path then
+        if item.type == "blob" and item.path then
             local path = item.path
             -- Skip certain files
             if not string.match(path, "^%.git/") and 

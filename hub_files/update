@@ -56,7 +56,8 @@ if not github_api then
         for obj_match in string.gmatch(tree_array, '{[^}]+}') do
             local path = string.match(obj_match, '"path"%s*:%s*"([^"]+)"')
             local obj_type = string.match(obj_match, '"type"%s*:%s*"([^"]+)"')
-            if path and obj_type == "file" then
+            -- GitHub API returns "blob" for files and "tree" for directories
+            if path and obj_type == "blob" then
                 table.insert(filtered, path)
             end
         end
@@ -99,7 +100,8 @@ local function get_hub_files()
     -- Collect hub files
     local hub_files = {}
     for _, item in ipairs(tree) do
-        if item.type == "file" and item.path then
+        -- GitHub API returns "blob" for files and "tree" for directories
+        if item.type == "blob" and item.path then
             local path = item.path
             -- Include hub_files/* and hub.lua, exclude config unless force_config
             if string.match(path, "^hub_files/") then

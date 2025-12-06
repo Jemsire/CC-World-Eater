@@ -13,11 +13,12 @@ function github_api.parse_json_simple(json_str)
     end
     
     -- Parse objects in the array using regex to find path and type
+    -- GitHub API returns "blob" for files and "tree" for directories
     local filtered = {}
     for obj_match in string.gmatch(tree_array, '{[^}]+}') do
         local path = string.match(obj_match, '"path"%s*:%s*"([^"]+)"')
         local obj_type = string.match(obj_match, '"type"%s*:%s*"([^"]+)"')
-        if path and obj_type == "file" then
+        if path and obj_type == "blob" then
             table.insert(filtered, path)
         end
     end
