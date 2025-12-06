@@ -161,6 +161,19 @@ local function download_file_list()
     })
     
     if not response then
+        print("  ERROR: Failed to connect to GitHub API")
+        return nil
+    end
+    
+    -- Check response code first (before reading content)
+    local response_code = response.getResponseCode()
+    if response_code ~= 200 then
+        local error_content = response.readAll()
+        response.close()
+        print("  ERROR: GitHub API returned code " .. response_code)
+        if error_content and #error_content > 0 and #error_content < 200 then
+            print("  Response: " .. error_content)
+        end
         return nil
     end
     
@@ -178,12 +191,23 @@ local function download_file_list()
         if file_paths then
             json_data = {tree = {}}
             for _, path in ipairs(file_paths) do
-                table.insert(json_data.tree, {path = path, type = "file"})
+                -- GitHub API uses "blob" for files, not "file"
+                table.insert(json_data.tree, {path = path, type = "blob"})
             end
         end
     end
     
     if not json_data or not json_data.tree then
+        print("  ERROR: Failed to parse JSON response from GitHub API")
+        print("  Content length: " .. (#content or 0))
+        if content and #content < 500 then
+            print("  Content preview: " .. string.sub(content, 1, 200))
+        end
+        return nil
+    end
+    
+    if #json_data.tree == 0 then
+        print("  ERROR: GitHub API returned empty file tree")
         return nil
     end
     
