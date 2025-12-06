@@ -29,6 +29,23 @@ file = fs.open('/hub_id', 'w')
 file.write(hub_id)
 file.close()
 
+-- Create startup file to automatically run startup.lua on boot
+-- (startup.lua is already copied from turtle_files by this script)
+local startup_file = fs.open('/startup', 'w')
+if startup_file then
+    startup_file.write([[
+-- Auto-generated startup file for World Eater Turtle
+-- This file runs the turtle's main startup script
+
+if fs.exists('/startup.lua') then
+    shell.run('/startup.lua')
+else
+    print('startup.lua not found - run turtle.lua to initialize')
+end
+]])
+    startup_file.close()
+end
+
 print("Linked")
 
 sleep(1)

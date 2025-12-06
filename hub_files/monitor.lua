@@ -1180,7 +1180,6 @@ function step()
     end
     draw_monitor()
     monitor.setVisible(true)
-    monitor.setVisible(false)
     sleep(sleep_len)
 end
 
@@ -1205,20 +1204,57 @@ function main()
     monitor = window.create(attached, 1, 1, monitor_width, monitor_height)
     monitor.restore_to = term.current()
     monitor.clear()
-    monitor.setVisible(false)
+    monitor.setVisible(true)
     monitor.setCursorPos(1, 1)
     
+    -- Show loading message while waiting for state.mine
+    term.redirect(monitor)
+    term.setBackgroundColor(colors.black)
+    term.setTextColor(colors.white)
+    monitor.clear()
+    term.setCursorPos(1, 1)
+    print("World Eater Hub")
+    print("Initializing...")
+    print("")
+    print("Waiting for mine state...")
+    term.redirect(monitor.restore_to)
+    
     monitor_location = {x = config.locations.mine_enter.x, z = config.locations.mine_enter.z}
-    monitor_zoom_level = config.default_monitor_zoom_level
+    monitor_zoom_level = config.default_monitor_zoom_level or 0
     
     init_elements()
     
+    -- Wait for state.mine with loading indicator
+    local wait_count = 0
     while not state.mine do
+        wait_count = wait_count + 1
+        if wait_count % 4 == 0 then
+            -- Update loading message every 2 seconds
+            term.redirect(monitor)
+            term.setCursorPos(1, 4)
+            local dots = string.rep(".", (wait_count / 4) % 4)
+            print("Waiting for mine state" .. dots .. "   ")
+            term.redirect(monitor.restore_to)
+        end
         sleep(0.5)
     end
     
     monitor_level_index = 1
-    select_mine_level()
+    -- Safely select mine level with error handling
+    local status, err = pcall(select_mine_level)
+    if not status then
+        term.redirect(monitor)
+        term.setBackgroundColor(colors.black)
+        term.setTextColor(colors.red)
+        monitor.clear()
+        term.setCursorPos(1, 1)
+        print("Error initializing monitor:")
+        print(tostring(err))
+        print("")
+        print("Check config.mine_levels")
+        term.redirect(monitor.restore_to)
+        return
+    end
     
     state.monitor_touches = {}
     while true do
