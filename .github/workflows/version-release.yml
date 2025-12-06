@@ -16,16 +16,20 @@ jobs:
       contents: write
 
     steps:
+
+      # --- Checkout ---
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # Needed for commit history
+          fetch-depth: 0
 
+      # --- GitHub CLI ---
       - name: Install GitHub CLI
         run: |
           sudo apt-get update
           sudo apt-get install -y gh
 
+      # --- Parse version.lua ---
       - name: Parse version.lua
         id: version
         run: |
@@ -33,12 +37,17 @@ jobs:
 
           MAJOR=$(grep -v '^\s*--' "$VF" | grep -E 'major\s*=' | sed -E 's/.*major[[:space:]]*=[[:space:]]*([0-9]+).*/\1/')
           MINOR=$(grep -v '^\s*--' "$VF" | grep -E 'minor\s*=' | sed -E 's/.*minor[[:space:]]*=[[:space:]]*([0-9]+).*/\1/')
-          HOTFIX=$(grep -v '^\s*--' "$VF" | grep -V '^\s*--' | grep -E 'hotfix\s*=' | sed -E 's/.*hotfix[[:space:]]*=[[:space:]]*([0-9]+).*/\1/')
+          HOTFIX=$(grep -v '^\s*--' "$VF" | grep -E 'hotfix\s*=' | sed -E 's/.*hotfix[[:space:]]*=[[:space:]]*([0-9]+).*/\1/')
 
           VERSION="${MAJOR}.${MINOR}.${HOTFIX}"
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "tag=v${VERSION}"
+          TAG="v${VERSION}"
 
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+          echo "Detected version: ${VERSION}"
+
+      # --- Determine previous tag ---
       - name: Determine previous tag
         id: prev
         run: |
@@ -46,44 +55,52 @@ jobs:
           echo "previous=${PREV}" >> $GITHUB_OUTPUT
           echo "Previous tag: $PREV"
 
+      # --- Generate changelog ---
       - name: Generate changelog (with authors)
-        id: changelog
         run: |
           NEW_TAG="${{ steps.version.outputs.tag }}"
           OLD_TAG="${{ steps.prev.outputs.previous }}"
 
-          echo "Generating changelog from $OLD_TAG to $NEW_TAG"
+          echo "Generating changelog from ${OLD_TAG} to ${NEW_TAG}"
 
           if [ -z "$OLD_TAG" ]; then
-            echo "No previous tag; generating from full history."
+            echo "No previous tag found; using full history."
             git log --pretty=format:"- %s (%h) — by %an" > CHANGELOG.md
           else
             git log "$OLD_TAG"..HEAD --pretty=format:"- %s (%h) — by %an" > CHANGELOG.md
           fi
 
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          cat CHANGELOG.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "Generated CHANGELOG.md:"
+          cat CHANGELOG.md
 
+      # --- Create or update GitHub Release ---
       - name: Create or Update Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ steps.version.outputs.tag }}"
           VERSION="${{ steps.version.outputs.version }}"
-          CHANGELOG="${{ steps.changelog.outputs.changelog }}"
 
+          # Read changelog from file
+          CHANGELOG_CONTENT=$(cat CHANGELOG.md)
+
+          # Try to get release ID; empty if none exists
           RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/${TAG} --jq '.id' 2>/dev/null || echo "")
 
-          NOTES="### Version ${VERSION}
+          NOTES=$(cat <<EOF
+### Version ${VERSION}
 
-#### Changes  
-${CHANGELOG}
+#### Changes
+${CHANGELOG_CONTENT}
 
-Automatically generated from commit history, including authors."
+Automatically generated from commit history, including commit authors.
+EOF
+)
 
           if [ -z "$RELEASE_ID" ]; then
+            echo "Creating new release ${TAG}"
             gh release create "$TAG" --title "v${VERSION}" --notes "$NOTES" --latest
           else
+            echo "Updating existing release ${TAG}"
             gh release edit "$TAG" --title "v${VERSION}" --notes "$NOTES" --latest
           fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
