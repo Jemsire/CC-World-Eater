@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discussion / Questions
+    url: https://github.com/Jemsire/CC-World-Eater/discussions
+    about: Ask questions and discuss ideas with the community
+  - name: Video Tutorial
+    url: https://www.youtube.com/watch?v=2DTP1LXuiCg
+    about: Check out the installation tutorial on YouTube
+

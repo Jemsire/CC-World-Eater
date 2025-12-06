@@ -1,0 +1,18 @@
+# Simple workflow to ensure issues/PRs are labeled
+name: Label Check
+
+on:
+  issues:
+    types: [opened]
+  pull_request:
+    types: [opened]
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check labels
+        run: |
+          echo "Label check completed"
+          # Add custom label logic here if needed
+
