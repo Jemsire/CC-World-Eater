@@ -64,6 +64,10 @@ local error_count = 0
 
 -- Download and update each file
 for _, filepath in ipairs(turtle_files) do
+    -- Yield to prevent "too long without yielding" error
+    os.queueEvent("yield")
+    os.pullEvent("yield")
+    
     -- Check if we should skip this file
     if not force_config and config_files[filepath] then
         print("  Skipping (config): " .. filepath)
@@ -76,7 +80,18 @@ for _, filepath in ipairs(turtle_files) do
         
         local response = http.get(url)
         if response then
-            local content = response.readAll()
+            -- Read content in chunks to avoid timeout
+            local content = ""
+            while true do
+                local chunk = response.read(8192)  -- Read 8KB at a time
+                if not chunk then break end
+                content = content .. chunk
+                -- Yield periodically during large downloads
+                if #content % 32768 == 0 then
+                    os.queueEvent("yield")
+                    os.pullEvent("yield")
+                end
+            end
             response.close()
             
             -- Create directory if needed
@@ -95,6 +110,10 @@ for _, filepath in ipairs(turtle_files) do
             if file then
                 file.write(content)
                 file.close()
+                
+                -- Yield after file operations
+                os.queueEvent("yield")
+                os.pullEvent("yield")
                 
                 -- Verify file was written
                 if fs.exists(dest_path) then
