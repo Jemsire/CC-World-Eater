@@ -1311,13 +1311,10 @@ function main()
     -- Find the closest unmined block
     gen_next_block()
     
-    local cycle = 0
     while true do
-        print('Cycle: ' .. cycle)
         user_input()         -- PROCESS USER INPUT
         command_turtles()    -- COMMAND TURTLES
         sleep(0.1)           -- DELAY 0.1 SECONDS
-        cycle = cycle + 1
     end
 end
 
