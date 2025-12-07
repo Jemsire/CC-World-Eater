@@ -6,14 +6,41 @@
 inf = basics.inf
 str_xyz = basics.str_xyz
 
--- Load modules (they should already be in /apis/ from startup.lua)
--- But we load them here to ensure they're available in this thread
-os.loadAPI('/apis/block_management')
-os.loadAPI('/apis/turtle_assignment')
-os.loadAPI('/apis/version_management')
-os.loadAPI('/apis/task_management')
-os.loadAPI('/apis/user_commands')
-os.loadAPI('/apis/state_machine')
+-- Load modules using loadfile() - more reliable than os.loadAPI()
+-- Try /apis/ first (where startup.lua copies them), then root (where hub.lua copies them)
+local function load_module(name)
+    local paths = {
+        '/apis/' .. name .. '.lua',
+        '/apis/' .. name,
+        '/' .. name .. '.lua',
+        '/' .. name
+    }
+    
+    for _, path in ipairs(paths) do
+        if fs.exists(path) then
+            local func = loadfile(path)
+            if func then
+                local success, err = pcall(func)
+                if success then
+        return true
+                else
+                    print('ERROR: Failed to execute ' .. name .. ' from ' .. path .. ': ' .. tostring(err))
+                end
+            else
+                print('ERROR: Failed to loadfile ' .. name .. ' from ' .. path)
+            end
+        end
+    end
+    print('ERROR: Module file not found: ' .. name)
+    return false
+end
+
+load_module('block_management')
+load_module('turtle_assignment')
+load_module('version_management')
+load_module('task_management')
+load_module('user_commands')
+load_module('state_machine')
 
 function main()
     -- INCREASE SESSION ID BY ONE

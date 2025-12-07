@@ -1,5 +1,28 @@
 -- Load modules needed by events.lua
-os.loadAPI('/apis/version_management')
+-- Use loadfile() for separate threads (more reliable than os.loadAPI())
+local function load_module(name)
+    local paths = {
+        '/apis/' .. name .. '.lua',
+        '/apis/' .. name,
+        '/' .. name .. '.lua',
+        '/' .. name
+    }
+    
+    for _, path in ipairs(paths) do
+        if fs.exists(path) then
+            local func = loadfile(path)
+            if func then
+                local success, err = pcall(func)
+                if success then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+load_module('version_management')
 
 while true do
     event = {os.pullEvent()}
