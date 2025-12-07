@@ -6,41 +6,40 @@
 inf = basics.inf
 str_xyz = basics.str_xyz
 
--- Load modules using loadfile() - more reliable than os.loadAPI()
--- Try /apis/ first (where startup.lua copies them), then root (where hub.lua copies them)
-local function load_module(name)
-    local paths = {
-        '/apis/' .. name .. '.lua',
-        '/apis/' .. name,
-        '/' .. name .. '.lua',
-        '/' .. name
-    }
-    
-    for _, path in ipairs(paths) do
-        if fs.exists(path) then
-            local func = loadfile(path)
-            if func then
-                local success, err = pcall(func)
-                if success then
-        return true
-                else
-                    print('ERROR: Failed to execute ' .. name .. ' from ' .. path .. ': ' .. tostring(err))
+-- Load modules using require()
+-- Implement require() if not available (for CC:Tweaked compatibility)
+if not require then
+    local loaded = {}
+    require = function(name)
+        if loaded[name] then
+            return loaded[name]
+        end
+        local paths = {
+            '/apis/' .. name .. '.lua',
+            '/apis/' .. name,
+            '/' .. name .. '.lua',
+            '/' .. name
+        }
+        for _, path in ipairs(paths) do
+            if fs.exists(path) then
+                local func = loadfile(path)
+                if func then
+                    local result = func()
+                    loaded[name] = result or true
+                    return loaded[name]
                 end
-            else
-                print('ERROR: Failed to loadfile ' .. name .. ' from ' .. path)
             end
         end
+        error('module "' .. name .. '" not found')
     end
-    print('ERROR: Module file not found: ' .. name)
-    return false
 end
 
-load_module('block_management')
-load_module('turtle_assignment')
-load_module('version_management')
-load_module('task_management')
-load_module('user_commands')
-load_module('state_machine')
+require('block_management')
+require('turtle_assignment')
+require('version_management')
+require('task_management')
+require('user_commands')
+require('state_machine')
 
 function main()
     -- INCREASE SESSION ID BY ONE

@@ -2,6 +2,38 @@
 os.setComputerLabel('Turtle ' .. os.getComputerID())
 
 -- INITIALIZE APIS
+-- Implement require() if not available (for CC:Tweaked compatibility)
+if not require then
+    local loaded = {}
+    require = function(name)
+        -- Check if already loaded
+        if loaded[name] then
+            return loaded[name]
+        end
+        
+        -- Try multiple paths
+        local paths = {
+            '/apis/' .. name .. '.lua',
+            '/apis/' .. name,
+            '/' .. name .. '.lua',
+            '/' .. name
+        }
+        
+        for _, path in ipairs(paths) do
+            if fs.exists(path) then
+                local func = loadfile(path)
+                if func then
+                    local result = func()
+                    loaded[name] = result or true  -- Store result or true if nil
+                    return loaded[name]
+                end
+            end
+        end
+        
+        error('module "' .. name .. '" not found')
+    end
+end
+
 if fs.exists('/apis') then
     fs.delete('/apis')
 end
@@ -9,9 +41,9 @@ fs.makeDir('/apis')
 fs.copy('/config.lua', '/apis/config')
 fs.copy('/state.lua', '/apis/state')
 fs.copy('/utilities.lua', '/apis/basics')
-os.loadAPI('/apis/config')
-os.loadAPI('/apis/state')
-os.loadAPI('/apis/basics')
+require('config')
+require('state')
+require('basics')
 
 -- Copy and load turtle action modules
 fs.copy('/movement.lua', '/apis/movement')
@@ -20,16 +52,16 @@ fs.copy('/detection.lua', '/apis/detection')
 fs.copy('/item_management.lua', '/apis/item_management')
 fs.copy('/mining.lua', '/apis/mining')
 fs.copy('/turtle_utilities.lua', '/apis/turtle_utilities')
-os.loadAPI('/apis/movement')
-os.loadAPI('/apis/navigation')
-os.loadAPI('/apis/detection')
-os.loadAPI('/apis/item_management')
-os.loadAPI('/apis/mining')
-os.loadAPI('/apis/turtle_utilities')
+require('movement')
+require('navigation')
+require('detection')
+require('item_management')
+require('mining')
+require('turtle_utilities')
 
 -- Load actions.lua (which provides the actions table)
 fs.copy('/actions.lua', '/apis/actions')
-os.loadAPI('/apis/actions')
+require('actions')
 
 
 -- OPEN REDNET
