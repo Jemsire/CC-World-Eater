@@ -296,41 +296,49 @@ local function get_file_list(system_type)
         local files = {}
         
         if system_type == "hub" then
-            -- Combine hub_files and root files
-            if file_lists["hub_files"] then
-                for _, file in ipairs(file_lists["hub_files"]) do
-                    table.insert(files, file)
-                end
-            end
-            if file_lists["root"] then
-                for _, file in ipairs(file_lists["root"]) do
-                    if string.match(file, "^hub%.lua$") then
+            -- Combine hub_files (including nested folders like apis) and root files
+            for folder, file_list in pairs(file_lists) do
+                if folder == "root" then
+                    for _, file in ipairs(file_list) do
+                        if string.match(file, "^hub%.lua$") then
+                            table.insert(files, file)
+                        end
+                    end
+                elseif string.match(folder, "^hub_files") then
+                    -- Include all files from hub_files and nested folders (like hub_files/apis)
+                    for _, file in ipairs(file_list) do
                         table.insert(files, file)
                     end
                 end
             end
         elseif system_type == "turtle" or system_type == "chunky" then
-            if file_lists["turtle_files"] then
-                for _, file in ipairs(file_lists["turtle_files"]) do
-                    table.insert(files, file)
-                end
-            end
-            if file_lists["root"] then
-                for _, file in ipairs(file_lists["root"]) do
-                    if string.match(file, "^turtle%.lua$") then
+            -- Combine turtle_files (including nested folders like apis) and root files
+            for folder, file_list in pairs(file_lists) do
+                if folder == "root" then
+                    for _, file in ipairs(file_list) do
+                        if string.match(file, "^turtle%.lua$") then
+                            table.insert(files, file)
+                        end
+                    end
+                elseif string.match(folder, "^turtle_files") then
+                    -- Include all files from turtle_files and nested folders (like turtle_files/apis)
+                    for _, file in ipairs(file_list) do
                         table.insert(files, file)
                     end
                 end
             end
         elseif system_type == "pocket" then
-            if file_lists["pocket_files"] then
-                for _, file in ipairs(file_lists["pocket_files"]) do
-                    table.insert(files, file)
-                end
-            end
-            if file_lists["root"] then
-                for _, file in ipairs(file_lists["root"]) do
-                    if string.match(file, "^pocket%.lua$") then
+            -- Combine pocket_files (including nested folders) and root files
+            for folder, file_list in pairs(file_lists) do
+                if folder == "root" then
+                    for _, file in ipairs(file_list) do
+                        if string.match(file, "^pocket%.lua$") then
+                            table.insert(files, file)
+                        end
+                    end
+                elseif string.match(folder, "^pocket_files") then
+                    -- Include all files from pocket_files and nested folders
+                    for _, file in ipairs(file_list) do
                         table.insert(files, file)
                     end
                 end
@@ -376,6 +384,12 @@ local function install_files(system_type, drive_path)
         for _, filepath in ipairs(file_set.files) do
             local url = base_url .. "/" .. filepath
             local dest_path = file_set.drive .. "/" .. filepath
+            
+            -- Ensure parent directories exist (for nested folders like apis)
+            local parent_dir = string.match(dest_path, "^(.-)[^/\\]*$")
+            if parent_dir and parent_dir ~= "" and not fs.exists(parent_dir) then
+                fs.makeDir(parent_dir)
+            end
             
             local success, err = download_file(url, dest_path)
             if not success then
