@@ -80,6 +80,19 @@ while true do
         end
     end
     
+    -- DEBUG: Show what we're reporting
+    local location_str = 'nil'
+    if state.location then
+        location_str = state.location.x .. ',' .. state.location.y .. ',' .. state.location.z
+    end
+    print('[DEBUG] Sending report - session_id: ' .. tostring(state.session_id) .. 
+          ', request_id: ' .. tostring(state.request_id) .. 
+          ', location: ' .. location_str .. 
+          ', orientation: ' .. tostring(state.orientation) ..
+          ', initialized: ' .. tostring(state.initialized) ..
+          ', success: ' .. tostring(state.success) ..
+          ', busy: ' .. tostring(state.busy))
+    
     rednet.send(hub_id, {
             session_id       = state.session_id,
             request_id       = state.request_id,

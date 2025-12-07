@@ -11,7 +11,8 @@ os.loadAPI('/apis/navigation.lua')      -- Navigation functions (go_to_home, go_
 os.loadAPI('/apis/item_management.lua') -- Item management (dump, prepare, etc.)
 os.loadAPI('/apis/mining.lua')          -- Mining functions (mine_to_bedrock, etc.)
 os.loadAPI('/apis/turtle_utilities.lua') -- Turtle utilities (calibrate, initialize, etc.)
-os.loadAPI('/apis/actions.lua')         -- Actions coordinator (must be last - depends on all above)
+-- Load actions.lua directly (not via os.loadAPI) to avoid wrapper table conflicts
+dofile('/apis/actions.lua')
 
 
 -- OPEN REDNET

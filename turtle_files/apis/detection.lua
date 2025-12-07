@@ -171,3 +171,11 @@ function clear_gravity_blocks()
     return true
 end
 
+-- Explicitly expose functions as globals (os.loadAPI wraps them in a table)
+_G.checkTags = checkTags
+_G.detect_ore = detect_ore
+_G.scan = scan
+_G.detect_bedrock = detect_bedrock
+_G.safedig = safedig
+_G.clear_gravity_blocks = clear_gravity_blocks
+

@@ -78,3 +78,16 @@ function in_location(xyzo, location)
     return true
 end
 
+-- Explicitly expose functions as globals (os.loadAPI wraps them in a table)
+-- This ensures they're accessible to other modules that expect them as globals
+_G.str_xyz = str_xyz
+_G.distance = distance
+_G.in_area = in_area
+_G.in_location = in_location
+_G.dprint = dprint
+_G.inf = inf
+_G.bumps = bumps
+_G.left_shift = left_shift
+_G.right_shift = right_shift
+_G.reverse_shift = reverse_shift
+

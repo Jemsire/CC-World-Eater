@@ -143,16 +143,25 @@ function user_input(input)
                 if not turtle.data or turtle.data.session_id ~= session_id then
                     print('Turtle ' .. turtle.id .. ' is not initialized yet. Cannot return home.')
                 else
-                    turtle.tasks = {}
-                    -- Clear any halt state so turtle can move
-                    if fs.exists(state.turtles_dir_path .. turtle.id .. '/halt') then
-                        fs.delete(state.turtles_dir_path .. turtle.id .. '/halt')
+                    -- Safety check: ensure turtle.data exists and has location before calling send_turtle_up
+                    local success, err = pcall(function()
+                        turtle.tasks = {}
+                        -- Clear any halt state so turtle can move
+                        if fs.exists(state.turtles_dir_path .. turtle.id .. '/halt') then
+                            fs.delete(state.turtles_dir_path .. turtle.id .. '/halt')
+                        end
+                        -- Free turtle from block assignment
+                        free_turtle(turtle)
+                        -- Send turtle up from mine if underground, then go home
+                        -- Only call send_turtle_up if turtle has location data
+                        if turtle.data and turtle.data.location then
+                            send_turtle_up(turtle)
+                        end
+                        add_task(turtle, {action = 'go_to_home', end_state = 'park'})
+                    end)
+                    if not success then
+                        print('ERROR in return command for turtle ' .. turtle.id .. ': ' .. tostring(err))
                     end
-                    -- Free turtle from block assignment
-                    free_turtle(turtle)
-                    -- Send turtle up from mine if underground, then go home
-                    send_turtle_up(turtle)
-                    add_task(turtle, {action = 'go_to_home', end_state = 'park'})
                 end
             end
         elseif command == 'halt' then

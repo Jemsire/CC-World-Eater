@@ -66,6 +66,7 @@ end
 
 function check_turtle_versions()
     -- Check if any turtles are out of date and set them to updating state
+    -- Only check turtles that are parked (after completing their work cycle)
     local hub_version = get_hub_version()
     if not hub_version then
         -- Can't check versions if hub version not available
@@ -73,9 +74,11 @@ function check_turtle_versions()
     end
     
     for _, turtle in pairs(state.turtles) do
+        -- Only check turtles that are parked (after completing work cycle)
         -- Skip turtles that are already updating, halted, awaiting version verification, or not initialized
         -- Uninitialized turtles (session_id mismatch) need to initialize first before checking for updates
         if not turtle.data or 
+           turtle.state ~= 'park' or  -- Only check turtles in 'park' state
            turtle.state == 'updating' or 
            turtle.state == 'halt' or 
            turtle.update_complete or

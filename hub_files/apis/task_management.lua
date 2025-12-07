@@ -16,8 +16,38 @@ function send_tasks(turtle)
     local task = turtle.tasks[1]
     if task then
         local turtle_data = turtle.data or {}
+        -- Use _G.session_id to ensure we get the global value
+        local current_session_id = _G.session_id or session_id
+        
+        -- Skip initialize tasks if turtle is already initialized
+        if task.action == 'initialize' and turtle_data.session_id == current_session_id then
+            print('[HUB DEBUG] Skipping initialize task for turtle ' .. turtle.id .. ' (already initialized, session_id: ' .. tostring(turtle_data.session_id) .. ')')
+            table.remove(turtle.tasks, 1)
+            -- Don't modify task_id here - it will be set when we send the next task
+            return
+        end
+        
+        -- Skip calibrate tasks if turtle already has a location
+        if task.action == 'calibrate' and turtle_data.location and turtle_data.location.x and turtle_data.location.y and turtle_data.location.z then
+            print('[HUB DEBUG] Skipping calibrate task for turtle ' .. turtle.id .. ' (already has location: ' .. 
+                  turtle_data.location.x .. ',' .. turtle_data.location.y .. ',' .. turtle_data.location.z .. ')')
+            table.remove(turtle.tasks, 1)
+            -- Don't modify task_id here - it will be set when we send the next task
+            return
+        end
+        
         -- Check if task was completed (success reported and request_id matches)
-        if turtle_data.request_id == turtle.task_id and turtle.data.session_id == session_id then
+        -- Note: turtle increments request_id after completing a task, so we check if reported request_id is one higher than what we sent
+        -- turtle.task_id is set to the request_id we sent, so we check if turtle_data.request_id == turtle.task_id + 1
+        -- OR if turtle_data.request_id == turtle.task_id (in case the turtle hasn't incremented yet)
+        -- IMPORTANT: Only match if the action matches what we sent (prevents matching wrong task)
+        local request_id_matches = false
+        if turtle.task_id then
+            request_id_matches = (turtle_data.request_id == turtle.task_id or turtle_data.request_id == turtle.task_id + 1)
+        end
+        local action_matches = (turtle.task_action == task.action)
+        if request_id_matches and action_matches and turtle.data.session_id == current_session_id then
+            print('[HUB DEBUG] Task completion check: action=' .. task.action .. ', request_id=' .. tostring(turtle_data.request_id) .. ', task_id=' .. tostring(turtle.task_id) .. ', task_action=' .. tostring(turtle.task_action) .. ', success=' .. tostring(turtle_data.success))
             if turtle_data.success then
                 if task.end_state then
                     if turtle.state == 'halt' and task.end_state ~= 'halt' then
@@ -26,6 +56,7 @@ function send_tasks(turtle)
                     -- Protect 'updating' state - don't allow tasks to overwrite it
                     -- The update flow manages state transitions for updating turtles
                     if turtle.state ~= 'updating' or task.end_state == 'updating' then
+                        print('[HUB DEBUG] Task ' .. task.action .. ' completed, transitioning turtle ' .. turtle.id .. ' from ' .. turtle.state .. ' to ' .. task.end_state)
                         turtle.state = task.end_state
                     end
                 end
@@ -37,7 +68,9 @@ function send_tasks(turtle)
                     end
                 end
                 table.remove(turtle.tasks, 1)
-                turtle.task_id = turtle.task_id + 1
+                -- Clear task_id and task_action so we don't match old tasks
+                turtle.task_id = nil
+                turtle.task_action = nil
             end
         -- Send task if turtle is not busy and timeout has passed
         elseif (not turtle_data.busy) and ((not task.epoch) or (task.epoch > os.clock()) or (task.epoch + config.task_timeout < os.clock())) then
@@ -49,10 +82,24 @@ function send_tasks(turtle)
                     print(string.format('Sending %s directive to %d', task.action, turtle.id))
                 end
             end
+            -- For initialize action, use -1 (always accept) if turtle not initialized, otherwise use turtle's request_id
+            -- For other actions, use turtle's current request_id, or default to 1 if not set
+            local send_request_id
+            if task.action == 'initialize' and (not turtle_data.session_id or turtle_data.session_id ~= current_session_id) then
+                -- Initialize action for uninitialized turtle - use -1 so it's always accepted
+                send_request_id = -1
+            else
+                send_request_id = turtle_data.request_id or 1
+            end
+            -- Set task_id to match the request_id we're sending, so we can match it when the turtle reports back
+            -- Also store the action name to verify we're matching the right task
+            turtle.task_id = send_request_id
+            turtle.task_action = task.action  -- Store which action we sent with this task_id
+            print('[HUB DEBUG] Sending ' .. task.action .. ' to turtle ' .. turtle.id .. ' with request_id: ' .. tostring(send_request_id) .. ' (turtle has: ' .. tostring(turtle_data.request_id) .. ', session_id: ' .. tostring(turtle_data.session_id) .. ', task_id set to: ' .. tostring(turtle.task_id) .. ')')
             rednet.send(turtle.id, {
                 action = task.action,
                 data = task.data,
-                request_id = turtle_data.request_id
+                request_id = send_request_id
             }, 'mastermine')
         end
     end
@@ -73,7 +120,21 @@ end
 
 
 function initialize_turtle(turtle)
-    local data = {session_id, config}
+    -- Use _G.session_id to ensure we get the global value, not a local shadow
+    local current_session_id = _G.session_id or session_id
+    local current_config = _G.config or config
+    
+    -- Debug: Check if session_id and config are available
+    if not current_session_id then
+        print('[HUB ERROR] session_id is nil when initializing turtle ' .. turtle.id)
+        print('[HUB ERROR] _G.session_id=' .. tostring(_G.session_id) .. ', session_id=' .. tostring(session_id))
+    end
+    if not current_config then
+        print('[HUB ERROR] config is nil when initializing turtle ' .. turtle.id)
+    end
+    
+    local data = {current_session_id, current_config}
+    print('[HUB DEBUG] initialize_turtle data: session_id=' .. tostring(data[1]) .. ', config type=' .. tostring(type(data[2])))
     
     if turtle.state ~= 'halt' then
         -- If turtle just completed an update, keep it in updating state until version is verified

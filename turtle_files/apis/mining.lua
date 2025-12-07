@@ -284,3 +284,9 @@ function mine_to_bedrock(block)
     return completed
 end
 
+-- Explicitly expose functions as globals (os.loadAPI wraps them in a table)
+_G.find_path_around_obstacle = find_path_around_obstacle
+_G.mine_column_down = mine_column_down
+_G.mine_column_up = mine_column_up
+_G.mine_to_bedrock = mine_to_bedrock
+

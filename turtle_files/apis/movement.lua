@@ -304,3 +304,32 @@ function pass()
     return true
 end
 
+-- Explicitly expose functions and tables as globals (os.loadAPI wraps them in a table)
+-- This ensures they're accessible to other modules that expect them as globals
+_G.up = up
+_G.forward = forward
+_G.down = down
+_G.back = back
+_G.left = left
+_G.right = right
+_G.go = go
+_G.face = face
+_G.follow_route = follow_route
+_G.go_to = go_to
+_G.go_to_axis = go_to_axis
+_G.go_route = go_route
+_G.log_movement = log_movement
+_G.digblock = digblock
+_G.delay = delay
+_G.pass = pass
+_G.move = move
+_G.detect = detect
+_G.inspect = inspect
+_G.dig = dig
+_G.attack = attack
+_G.getblock = getblock
+_G.bumps = bumps
+_G.left_shift = left_shift
+_G.right_shift = right_shift
+_G.reverse_shift = reverse_shift
+

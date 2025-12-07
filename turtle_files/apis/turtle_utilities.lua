@@ -115,6 +115,17 @@ end
 function initialize(session_id, config_values)
     -- INITIALIZE TURTLE (old simple method - no handshake)
     
+    -- Safety check: ensure we have valid arguments
+    if not session_id then
+        print("ERROR: initialize called without session_id")
+        return false
+    end
+    
+    if not config_values or type(config_values) ~= "table" then
+        print("ERROR: initialize called without valid config_values (got: " .. tostring(type(config_values)) .. ")")
+        return false
+    end
+    
     state.session_id = session_id
     
     -- COPY CONFIG DATA INTO MEMORY
@@ -142,8 +153,12 @@ function initialize(session_id, config_values)
         end
     end
     
-    state.request_id = 1
+    -- Don't reset request_id if already set (preserve from previous initialization)
+    if not state.request_id or state.request_id == 0 then
+        state.request_id = 1
+    end
     state.initialized = true
+    print('[DEBUG] Initialize complete - session_id: ' .. tostring(session_id) .. ', type: ' .. tostring(state.type) .. ', request_id: ' .. tostring(state.request_id))
     return true
 end
 
@@ -152,4 +167,10 @@ function getcwd()
     local program_name = fs.getName(running_program)
     return "/" .. running_program:sub(1, #running_program - #program_name)
 end
+
+-- Explicitly expose functions as globals (os.loadAPI wraps in table, but we want globals)
+_G.calibrate_self = calibrate_self
+_G.calibrate = calibrate
+_G.initialize = initialize
+_G.getcwd = getcwd
 

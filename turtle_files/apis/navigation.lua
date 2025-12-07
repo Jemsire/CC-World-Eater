@@ -10,30 +10,73 @@ function go_to_home()
         return false
     end
     
+    print('[DEBUG go_to_home] Starting from location: ' .. str_xyz(state.location, state.orientation))
+    
     state.updated_not_home = nil
     if in_area(state.location, config.locations.home_area) then
+        print('[DEBUG go_to_home] Already in home_area, returning true')
         return true
     elseif in_area(state.location, config.locations.greater_home_area) then
-        if not go_to_home_exit() then return false end
+        print('[DEBUG go_to_home] In greater_home_area, going to home_exit')
+        if not go_to_home_exit() then 
+            print('[DEBUG go_to_home] Failed to go_to_home_exit')
+            return false 
+        end
     elseif in_area(state.location, config.locations.waiting_room_area) then
-        if not go_to(config.locations.mine_exit, nil, config.paths.waiting_room_to_mine_exit, true) then return false end
+        print('[DEBUG go_to_home] In waiting_room_area, going to mine_exit')
+        if not go_to(config.locations.mine_exit, nil, config.paths.waiting_room_to_mine_exit, true) then 
+            print('[DEBUG go_to_home] Failed to go to mine_exit from waiting_room')
+            return false 
+        end
     elseif state.location.y < config.locations.mine_enter.y then
+        print('[DEBUG go_to_home] ERROR: Below mine_enter (y=' .. tostring(state.location.y) .. ' < ' .. tostring(config.locations.mine_enter.y) .. ')')
         return false
     end
-    if config.locations.main_loop_route[str_xyz(state.location)] then
-        if not go_route(config.locations.main_loop_route, config.locations.home_enter) then return false end
+    
+    local location_str = str_xyz(state.location)
+    if config.locations.main_loop_route[location_str] then
+        print('[DEBUG go_to_home] In main_loop_route, routing to home_enter')
+        if not go_route(config.locations.main_loop_route, config.locations.home_enter) then 
+            print('[DEBUG go_to_home] Failed to route to home_enter via main_loop_route')
+            return false 
+        end
     elseif in_area(state.location, config.locations.control_room_area) then
-        if not go_to(config.locations.home_enter, nil, config.paths.control_room_to_home_enter, true) then return false end
+        print('[DEBUG go_to_home] In control_room_area, going to home_enter')
+        if not go_to(config.locations.home_enter, nil, config.paths.control_room_to_home_enter, true) then 
+            print('[DEBUG go_to_home] Failed to go to home_enter from control_room')
+            return false 
+        end
     else
+        print('[DEBUG go_to_home] ERROR: Not in main_loop_route or control_room_area. Location: ' .. location_str)
+        print('[DEBUG go_to_home] main_loop_route exists: ' .. tostring(config.locations.main_loop_route ~= nil))
+        print('[DEBUG go_to_home] control_room_area exists: ' .. tostring(config.locations.control_room_area ~= nil))
         return false
     end
-    if not forward() then return false end
-    while detect.down() do
-        if not forward() then return false end
+    
+    print('[DEBUG go_to_home] Reached home_enter area, moving into home')
+    if not forward() then 
+        print('[DEBUG go_to_home] Failed to move forward into home')
+        return false 
     end
-    if not down() then return false end
-    if not right() then return false end
-    if not right() then return false end
+    while detect.down() do
+        if not forward() then 
+            print('[DEBUG go_to_home] Failed to move forward (detecting down)')
+            return false 
+        end
+    end
+    if not down() then 
+        print('[DEBUG go_to_home] Failed to move down into home')
+        return false 
+    end
+    if not right() then 
+        print('[DEBUG go_to_home] Failed to turn right')
+        return false 
+    end
+    if not right() then 
+        print('[DEBUG go_to_home] Failed to turn right (second turn)')
+        return false 
+    end
+    print('[DEBUG go_to_home] Successfully reached home')
     return true
 end
 
@@ -249,4 +292,18 @@ function fastest_route(area, pos, fac, end_locations)
         end
     end
 end
+
+-- Explicitly expose functions as globals (os.loadAPI wraps them in a table)
+_G.go_to_home = go_to_home
+_G.go_to_home_exit = go_to_home_exit
+_G.go_to_item_drop = go_to_item_drop
+_G.go_to_refuel = go_to_refuel
+_G.go_to_disk = go_to_disk
+_G.go_to_waiting_room = go_to_waiting_room
+_G.go_to_mine_enter = go_to_mine_enter
+_G.go_to_mine_exit = go_to_mine_exit
+_G.go_to_block = go_to_block
+_G.go_to_block_offset = go_to_block_offset
+_G.follow_mining_turtle = follow_mining_turtle
+_G.fastest_route = fastest_route
 

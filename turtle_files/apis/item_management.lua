@@ -45,3 +45,8 @@ function prepare(min_fuel_amount)
     return true
 end
 
+-- Explicitly expose functions as globals (os.loadAPI wraps them in a table)
+_G.dump_items = dump_items
+_G.dump = dump
+_G.prepare = prepare
+

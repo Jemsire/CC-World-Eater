@@ -15,14 +15,18 @@ os.loadAPI('/apis/utilities.lua')
 
 function main()
     -- INCREASE SESSION ID BY ONE
+    -- Make session_id explicitly global so it's accessible to all loaded APIs
     if fs.exists('/session_id') then
-        session_id = tonumber(fs.open('/session_id', 'r').readAll()) + 1
+        _G.session_id = tonumber(fs.open('/session_id', 'r').readAll()) + 1
     else
-        session_id = 1
+        _G.session_id = 1
     end
     local file = fs.open('/session_id', 'w')
-    file.write(session_id)
+    file.write(_G.session_id)
     file.close()
+    
+    -- Also set local reference for convenience
+    session_id = _G.session_id
     
     -- LOAD MINE INTO MEMORY
     local success, err = pcall(load_mine)

@@ -8,7 +8,7 @@ inf = 1e309
 -- HUB REFERENCE POINT (Central reference for entire setup)
 --     This is the central reference block that everything is positioned relative to
 --     Hub computer must be within 8 blocks north or south of this point
-hub_reference = {x = 104, y = 76, z = 215}
+hub_reference = {x = 2141, y = 132, z = -130}
 
 -- MINING CENTER (Where mining operations start from)
 --     Located 2 blocks below hub_reference to avoid surface interference
