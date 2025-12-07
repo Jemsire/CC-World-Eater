@@ -625,36 +625,54 @@ function check_turtle_versions()
     for _, turtle in pairs(state.turtles) do
         -- Only check turtles that have data, are not already updating, and are not awaiting version verification
         if turtle.data and turtle.state ~= 'updating' and turtle.state ~= 'halt' and not turtle.update_complete then
-            local needs_update = false
-            
-            -- Check if turtle has force_update flag set (from dev force update or manual command)
-            if turtle.force_update then
-                needs_update = true
-            -- If turtle has no version data, consider it out of date
-            elseif not turtle.data.version then
-                needs_update = true
-            elseif turtle.data.version then
-                local turtle_version = turtle.data.version
-                local comparison = compare_versions(turtle_version, hub_version)
-                
-                -- If turtle version is older than hub version, needs update
-                if comparison and comparison < 0 then
-                    needs_update = true
+            -- Check if turtle already has a task queued that will set it to updating state
+            local has_update_task = false
+            if turtle.tasks and #turtle.tasks > 0 then
+                for _, task in ipairs(turtle.tasks) do
+                    if task.end_state == 'updating' then
+                        has_update_task = true
+                        break
+                    end
                 end
             end
-                    
-            if needs_update then
+            
+            -- Skip if already has an update task queued
+            if has_update_task then
+                -- Set state immediately to prevent duplicate checks
+                turtle.state = 'updating'
+            else
+                local needs_update = false
+                
+                -- Check if turtle has force_update flag set (from dev force update or manual command)
                 if turtle.force_update then
-                    print('Turtle ' .. turtle.id .. ' force update requested. Setting to updating state...')
-                    turtle.force_update = nil  -- Clear flag after using it
-                else
-                    print('Turtle ' .. turtle.id .. ' is out of date. Setting to updating state...')
+                    needs_update = true
+                -- If turtle has no version data, consider it out of date
+                elseif not turtle.data.version then
+                    needs_update = true
+                elseif turtle.data.version then
+                    local turtle_version = turtle.data.version
+                    local comparison = compare_versions(turtle_version, hub_version)
+                    
+                    -- If turtle version is older than hub version, needs update
+                    if comparison and comparison < 0 then
+                        needs_update = true
+                    end
                 end
-                -- Free turtle from any block assignment
-                free_turtle(turtle)
-                -- Clear tasks and set to updating state
-                turtle.tasks = {}
-                add_task(turtle, {action = 'pass', end_state = 'updating'})
+                        
+                if needs_update then
+                    if turtle.force_update then
+                        print('Turtle ' .. turtle.id .. ' force update requested. Setting to updating state...')
+                        turtle.force_update = nil  -- Clear flag after using it
+                    else
+                        print('Turtle ' .. turtle.id .. ' is out of date. Setting to updating state...')
+                    end
+                    -- Free turtle from any block assignment
+                    free_turtle(turtle)
+                    -- Clear tasks and set to updating state IMMEDIATELY to prevent duplicate checks
+                    turtle.tasks = {}
+                    turtle.state = 'updating'
+                    add_task(turtle, {action = 'pass', end_state = 'updating'})
+                end
             end
         end
     end
@@ -701,8 +719,9 @@ function queue_turtles_for_update(turtle_list, update_hub_after, force_update)
         if turtle.data then
             -- Free turtle from any block assignment
             free_turtle(turtle)
-            -- Clear tasks and set to updating state
-        turtle.tasks = {}
+            -- Clear tasks and set to updating state IMMEDIATELY to prevent duplicate checks
+            turtle.tasks = {}
+            turtle.state = 'updating'
             turtle.force_update = force_update or false
             add_task(turtle, {action = 'pass', end_state = 'updating'})
             print('Set turtle ' .. turtle.id .. ' to updating state')
