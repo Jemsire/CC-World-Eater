@@ -65,7 +65,10 @@ function load_mine()
     for _, turtle_id in pairs(fs.list(state.turtles_dir_path)) do
         if turtle_id:sub(1, 1) ~= '.' then
             turtle_id = tonumber(turtle_id)
-            local turtle = {id = turtle_id}
+            local turtle = {
+                id = turtle_id,
+                tasks = {}  -- Initialize tasks array to prevent nil errors
+            }
             state.turtles[turtle_id] = turtle
             local turtle_dir_path = state.turtles_dir_path .. turtle_id .. '/'
             

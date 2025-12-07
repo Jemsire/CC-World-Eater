@@ -59,6 +59,11 @@ function command_turtles()
                 verify_turtle_version_after_update(turtle)
             end
 
+            -- Ensure tasks is initialized
+            if not turtle.tasks then
+                turtle.tasks = {}
+            end
+            
             if #turtle.tasks > 0 then
                 -- TURTLE IS BUSY
                 send_tasks(turtle)

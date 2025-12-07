@@ -10,13 +10,19 @@
 local API = {}
 API.__index = API
 
--- Private data storage
-local _data = {
-    config = nil,
-    state = nil,
-    utilities = nil,
-    loaded = false
-}
+-- Shared data storage (global so all threads share the same state)
+-- Use a global table so all threads/modules share the same data
+-- In ComputerCraft, multishell threads are coroutines that share _G, so this works across threads
+if not _G._API_DATA then
+    _G._API_DATA = {
+        config = nil,
+        state = nil,
+        utilities = nil,
+        loaded = false
+    }
+end
+-- All threads reference the same global table
+local _data = _G._API_DATA
 
 -- Determine the base path for loading files
 local function get_api_path(filename)

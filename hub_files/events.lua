@@ -16,7 +16,10 @@ while true do
         
         elseif protocol == 'turtle_report' then
             if not state.turtles[sender] then
-                state.turtles[sender] = {id = sender}
+                state.turtles[sender] = {
+                    id = sender,
+                    tasks = {}  -- Initialize tasks array to prevent nil errors
+                }
             end
             state.turtles[sender].data = message
             state.turtles[sender].last_update = os.clock()
