@@ -411,16 +411,6 @@ local function install_files(system_type, drive_path)
         local files = get_file_list(system_type)
         file_sets = {{files = files, drive = drive_path}}
     end
-
-    print("List of files to install: ")
-    for _, file_set in ipairs(file_sets) do
-        for _, filepath in ipairs(file_set.files) do
-            print("  " .. filepath)
-        end
-    end
-
-    print("Press any key to continue...")
-    read()
     
     -- Install all file sets
     for _, file_set in ipairs(file_sets) do
@@ -683,8 +673,6 @@ local function main()
     
     -- Download and install
     install_files(system_type, drive_path)
-    print("Press any key to continue...")
-    read()
     
     
     -- Validate
