@@ -176,6 +176,40 @@ function turtle_viewer(turtle_ids)
             x_position = x_position + 6
         end
         
+        -- Display turtle version below turtle ID
+        term.setCursorPos(elements.turtle_id.x, elements.turtle_id.y + 5)
+        term.setTextColor(colors.white)
+        term.write('Version: ')
+        if turtle.data.version then
+            local turtle_version_str = format_version(turtle.data.version)
+            if turtle_version_str then
+                -- Check if turtle version is out of date compared to hub
+                local hub_version = get_version()
+                local is_out_of_date = false
+                if hub_version and turtle.data.version then
+                    -- Compare versions (simple comparison)
+                    if turtle.data.version.major < hub_version.major or
+                       (turtle.data.version.major == hub_version.major and turtle.data.version.minor < hub_version.minor) or
+                       (turtle.data.version.major == hub_version.major and turtle.data.version.minor == hub_version.minor and turtle.data.version.hotfix < hub_version.hotfix) then
+                        is_out_of_date = true
+                    end
+                end
+                
+                if is_out_of_date then
+                    term.setTextColor(colors.red)
+                else
+                    term.setTextColor(colors.green)
+                end
+                term.write('v' .. turtle_version_str)
+            else
+                term.setTextColor(colors.gray)
+                term.write('unknown')
+            end
+        else
+            term.setTextColor(colors.gray)
+            term.write('unknown')
+        end
+        
         term.setCursorPos(elements.turtle_face.x + 1, elements.turtle_face.y)
         term.setBackgroundColor(colors.yellow)
         term.write('       ')
@@ -314,17 +348,11 @@ function turtle_viewer(turtle_ids)
         term.setTextColor(colors.green)
         term.write(turtle.data.fuel_level)
         
-        term.setCursorPos(elements.turtle_data.x, elements.turtle_data.y + 6)
+        term.setCursorPos(elements.turtle_data.x, elements.turtle_data.y + 7)
         term.setTextColor(colors.white)
-        term.write('Items: ')
+        term.write('Dist: ')
         term.setTextColor(colors.green)
-        term.write(turtle.data.item_count)
-        
---        term.setCursorPos(elements.turtle_data.x, elements.turtle_data.y + 7)
---        term.setTextColor(colors.white)
---        term.write('Dist: ')
---        term.setTextColor(colors.green)
---        term.write(turtle.data.distance)
+        term.write(turtle.data.distance)
         
         term.setTextColor(colors.white)
         
