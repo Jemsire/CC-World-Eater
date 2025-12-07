@@ -6,14 +6,25 @@ local state = API.getState()
 
 -- CONTINUOUSLY RECIEVE REDNET MESSAGES
 while true do
-    signal = {rednet.receive('mastermine')}
-    if signal[2].action == 'shutdown' then
-        os.shutdown()
-    elseif signal[2].action == 'reboot' then
-        os.reboot()
-    elseif signal[2].action == 'update' then
-        os.run({}, '/update')
-    else
-        table.insert(state.requests, signal)
+    local success, err = pcall(function()
+        signal = {rednet.receive('mastermine')}
+        if signal and signal[2] and signal[2].action then
+            if signal[2].action == 'shutdown' then
+                os.shutdown()
+            elseif signal[2].action == 'reboot' then
+                os.reboot()
+            elseif signal[2].action == 'update' then
+                os.run({}, '/update')
+            else
+                table.insert(state.requests, signal)
+                print('DEBUG: Received command: ' .. tostring(signal[2].action) .. ' from ' .. tostring(signal[1]))
+            end
+        else
+            print('DEBUG: Received malformed message')
+        end
+    end)
+    if not success then
+        print('ERROR in message_receiver: ' .. tostring(err))
+        sleep(1)  -- Wait before retrying to avoid spam
     end
 end
