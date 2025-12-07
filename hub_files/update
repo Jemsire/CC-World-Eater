@@ -5,8 +5,8 @@
 --   force-config: If provided, will also update config files
 
 local GITHUB_REPO = "Jemsire/CC-World-Eater"
-local GITHUB_BRANCH = "main"
-local GITHUB_BASE = "https://raw.githubusercontent.com/" .. GITHUB_REPO .. "/" .. GITHUB_BRANCH
+local GITHUB_BRANCH = "main"  -- Fallback if no releases found
+local GITHUB_BASE = nil  -- Will be set after getting latest release tag
 
 -- Check for force and force-config arguments
 local force_update = false
@@ -73,6 +73,30 @@ if not github_api then
         return filtered
     end
     
+    function github_api.get_latest_release_tag(github_repo)
+        -- Get the latest release tag from GitHub releases API
+        local api_url = "https://api.github.com/repos/" .. github_repo .. "/releases/latest"
+        local response = http.get(api_url, {["Accept"] = "application/vnd.github.v3+json"})
+        if not response then return nil end
+        
+        local content = response.readAll()
+        response.close()
+        
+        -- Try to parse JSON
+        local tag_name = nil
+        if textutils and textutils.unserializeJSON then
+            local json_data = textutils.unserializeJSON(content)
+            if json_data and json_data.tag_name then
+                tag_name = json_data.tag_name
+            end
+        else
+            -- Simple regex fallback
+            tag_name = string.match(content, '"tag_name"%s*:%s*"([^"]+)"')
+        end
+        
+        return tag_name
+    end
+    
     function github_api.get_file_tree(github_repo, github_branch)
         local api_url = "https://api.github.com/repos/" .. github_repo .. "/git/trees/" .. github_branch .. "?recursive=1"
         local response = http.get(api_url, {["Accept"] = "application/vnd.github.v3+json"})
@@ -98,9 +122,26 @@ if not github_api then
     end
 end
 
+-- Get latest release tag and set GITHUB_BASE accordingly
+print("Checking for latest release...")
+local latest_tag = github_api.get_latest_release_tag(GITHUB_REPO)
+if latest_tag then
+    -- Remove 'v' prefix if present (e.g., "v0.1.0" -> "0.1.0")
+    local tag_for_url = string.gsub(latest_tag, "^v", "")
+    GITHUB_BASE = "https://raw.githubusercontent.com/" .. GITHUB_REPO .. "/" .. latest_tag
+    print("Using latest release: " .. latest_tag)
+else
+    -- Fallback to main branch if no releases found
+    GITHUB_BASE = "https://raw.githubusercontent.com/" .. GITHUB_REPO .. "/" .. GITHUB_BRANCH
+    print("No releases found, using " .. GITHUB_BRANCH .. " branch")
+end
+print("")
+
 -- Download file list from GitHub using API (dynamic discovery)
 local function get_hub_files()
-    local tree = github_api.get_file_tree(GITHUB_REPO, GITHUB_BRANCH)
+    -- Use latest tag if available, otherwise fallback to main branch
+    local ref_to_use = latest_tag or GITHUB_BRANCH
+    local tree = github_api.get_file_tree(GITHUB_REPO, ref_to_use)
     
     if not tree then
         error("Failed to retrieve file list from GitHub API. Please check your internet connection and try again.")
@@ -198,7 +239,9 @@ end
 
 -- Function to get remote version from GitHub
 local function get_remote_version()
-    local url = GITHUB_BASE .. "/hub_files/version.lua"
+    -- Use latest tag if available, otherwise fallback to main branch
+    local base_url = latest_tag and ("https://raw.githubusercontent.com/" .. GITHUB_REPO .. "/" .. latest_tag) or GITHUB_BASE
+    local url = base_url .. "/hub_files/version.lua"
     local response = http.get(url)
     if response then
         local content = response.readAll()

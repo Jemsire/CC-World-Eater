@@ -26,6 +26,36 @@ function github_api.parse_json_simple(json_str)
     return filtered
 end
 
+-- Get the latest release tag from GitHub releases API
+function github_api.get_latest_release_tag(github_repo)
+    -- Get the latest release tag from GitHub releases API
+    local api_url = "https://api.github.com/repos/" .. github_repo .. "/releases/latest"
+    local response = http.get(api_url, {
+        ["Accept"] = "application/vnd.github.v3+json"
+    })
+    
+    if not response then
+        return nil
+    end
+    
+    local content = response.readAll()
+    response.close()
+    
+    -- Try to parse JSON
+    local tag_name = nil
+    if textutils and textutils.unserializeJSON then
+        local json_data = textutils.unserializeJSON(content)
+        if json_data and json_data.tag_name then
+            tag_name = json_data.tag_name
+        end
+    else
+        -- Simple regex fallback
+        tag_name = string.match(content, '"tag_name"%s*:%s*"([^"]+)"')
+    end
+    
+    return tag_name
+end
+
 -- Download file list from GitHub using API
 function github_api.get_file_tree(github_repo, github_branch)
     -- Use GitHub Trees API to get recursive file listing
