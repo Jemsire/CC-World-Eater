@@ -600,65 +600,40 @@ end
 
 
 function check_turtle_versions()
-    -- Check if any turtles are out of date and queue them for update
+    -- Check if any turtles are out of date and set them to updating state
     local hub_version = get_hub_version()
     if not hub_version then
         -- Can't check versions if hub version not available
         return
     end
     
-    local out_of_date_turtles = {}
-    
     for _, turtle in pairs(state.turtles) do
-        -- Only check turtles that have data
-        if turtle.data then
+        -- Only check turtles that have data and are not already updating
+        if turtle.data and turtle.state ~= 'updating' and turtle.state ~= 'halt' then
+            local needs_update = false
+            
             -- If turtle has no version data, consider it out of date
             if not turtle.data.version then
-                -- Check if turtle is already queued for update
-                local already_queued = false
-                if state.update_queue then
-                    for _, queued_id in ipairs(state.update_queue) do
-                        if queued_id == turtle.id then
-                            already_queued = true
-                            break
-                        end
-                    end
-                end
-                
-                -- Check if turtle is currently updating
-                if not already_queued and not turtle.update_pending and not turtle.update_complete then
-                    table.insert(out_of_date_turtles, turtle)
-                end
+                needs_update = true
             elseif turtle.data.version then
                 local turtle_version = turtle.data.version
                 local comparison = compare_versions(turtle_version, hub_version)
                 
-                -- If turtle version is older than hub version, queue for update
+                -- If turtle version is older than hub version, needs update
                 if comparison and comparison < 0 then
-                    -- Check if turtle is already queued for update
-                    local already_queued = false
-                    if state.update_queue then
-                        for _, queued_id in ipairs(state.update_queue) do
-                            if queued_id == turtle.id then
-                                already_queued = true
-                                break
-                            end
-                        end
-                    end
-                    
-                    -- Check if turtle is currently updating
-                    if not already_queued and not turtle.update_pending and not turtle.update_complete then
-                        table.insert(out_of_date_turtles, turtle)
-                    end
+                    needs_update = true
                 end
             end
+            
+            if needs_update then
+                print('Turtle ' .. turtle.id .. ' is out of date. Setting to updating state...')
+                -- Free turtle from any block assignment
+                free_turtle(turtle)
+                -- Clear tasks and set to updating state
+                turtle.tasks = {}
+                add_task(turtle, {action = 'pass', end_state = 'updating'})
+            end
         end
-    end
-    
-    -- Queue out-of-date turtles for update
-    if #out_of_date_turtles > 0 then
-        print('Found ' .. #out_of_date_turtles .. ' out-of-date turtle(s). Queuing for update...')
-        queue_turtles_for_update(out_of_date_turtles, false)
     end
 end
 
@@ -672,227 +647,76 @@ end
 
 
 function queue_turtles_for_update(turtle_list, update_hub_after, force_update)
-    -- Queue turtles for update: send home, then to disk, then update one at a time
+    -- Set turtles to updating state for state-based update system
     -- force_update: If true, updates turtles even if versions match
     if #turtle_list == 0 then
         if update_hub_after then
-            print('All turtles updated. Updating hub...')
-            sleep(1)
-            if force_update then
-                os.run({}, '/update', 'force')
-            else
-                os.run({}, '/update')
-            end
-        end
-        return
-    end
-    
-    -- Initialize update queue if needed
-    if not state.update_queue then
-        state.update_queue = {}
-        state.update_in_progress = false
-        state.update_hub_after = false
-        state.force_update = false
-    end
-    
-    -- Add turtles to queue
-    for _, turtle in pairs(turtle_list) do
-        turtle.tasks = {}
-        turtle.update_pending = true
-        turtle.update_complete = false
-        turtle.update_wait_start = nil  -- Reset wait timer
-        -- Mark turtle for force update if requested
-        if force_update then
-            turtle.force_update = true
-        end
-        table.insert(state.update_queue, turtle.id)
-        print('Queued turtle ' .. turtle.id .. ' for update')
-    end
-    
-    state.update_hub_after = update_hub_after
-    state.force_update = force_update or false
-    
-    print('Update queue initialized with ' .. #state.update_queue .. ' turtle(s)')
-    print('update_hub_after = ' .. tostring(update_hub_after))
-    
-    -- Start processing queue
-    process_update_queue()
-end
-
-
-function process_update_queue()
-    -- Process update queue one turtle at a time
-    if state.update_in_progress or not state.update_queue or #state.update_queue == 0 then
-        -- Queue empty or already processing
-        if #state.update_queue == 0 and state.update_hub_after then
-            -- Only update hub if we actually processed turtles (not if queue was empty from start)
-            -- Check if any turtles were actually commanded or updated
-            local any_turtles_processed = false
+            -- Check if all turtles are updated before updating hub
+            local all_updated = true
             for _, turtle in pairs(state.turtles) do
-                if turtle.update_complete or turtle.update_sent_home or turtle.update_sent_to_disk then
-                    any_turtles_processed = true
+                if turtle.data and turtle.state == 'updating' then
+                    all_updated = false
                     break
                 end
             end
             
-            -- If no turtles were found/processed, don't update hub immediately
-            -- Wait a bit to see if turtles show up and get commanded
-            if not any_turtles_processed then
-                print('No turtles found to update. Waiting 5 seconds for turtles to report...')
-                sleep(5)
-                -- Check one more time for turtles
-                local turtle_list = {}
-                for _, turtle in pairs(state.turtles) do
-                    if turtle.data then
-                        table.insert(turtle_list, turtle)
-                    end
-                end
-                if #turtle_list > 0 then
-                    print('Found ' .. #turtle_list .. ' turtle(s). Queuing for update...')
-                    for _, turtle in pairs(turtle_list) do
-                        turtle.tasks = {}
-                        turtle.update_pending = true
-                        turtle.update_complete = false
-                        turtle.update_wait_start = nil
-                        table.insert(state.update_queue, turtle.id)
-                    end
-                    -- Process the queue instead of updating hub
-                    process_update_queue()
-                    return
+            if all_updated then
+                print('All turtles updated. Updating hub...')
+                sleep(1)
+                if force_update then
+                    os.run({}, '/update', 'force')
                 else
-                    print('Still no turtles found. Updating hub only...')
+                    os.run({}, '/update')
                 end
             end
-            
-            print('All turtles updated. Updating hub...')
-            sleep(1)
-            if state.force_update then
-                os.run({}, '/update', 'force')
-            else
-                os.run({}, '/update')
+        end
+        return
+    end
+    
+    -- Set turtles to updating state
+    for _, turtle in pairs(turtle_list) do
+        if turtle.data then
+            -- Free turtle from any block assignment
+            free_turtle(turtle)
+            -- Clear tasks and set to updating state
+            turtle.tasks = {}
+            turtle.force_update = force_update or false
+            add_task(turtle, {action = 'pass', end_state = 'updating'})
+            print('Set turtle ' .. turtle.id .. ' to updating state')
+        end
+    end
+    
+    state.update_hub_after = update_hub_after
+    state.force_update = force_update or false
+end
+
+
+function count_turtles_at_disk()
+    -- Count how many turtles are currently at the disk drive
+    local count = 0
+    for _, turtle in pairs(state.turtles) do
+        if turtle.data and turtle.data.location and turtle.state == 'updating' then
+            if basics.in_location(turtle.data.location, config.locations.disk_drive) then
+                count = count + 1
             end
-            state.update_hub_after = false
-            state.force_update = false
-        end
-        return
-    end
-    
-    local turtle_id = state.update_queue[1]
-    local turtle = state.turtles[turtle_id]
-    
-    if not turtle then
-        -- Turtle not found, remove from queue
-        table.remove(state.update_queue, 1)
-        process_update_queue()
-        return
-    end
-    
-    -- Wait for turtle to have data before processing
-    if not turtle.data then
-        -- Turtle hasn't reported yet, wait for next cycle
-        -- But don't let this block forever - if we've been waiting too long, skip this turtle
-        if not turtle.update_wait_start then
-            turtle.update_wait_start = os.clock()
-        elseif os.clock() - turtle.update_wait_start > 10 then
-            -- Waited more than 10 seconds, remove from queue
-            print('Turtle ' .. turtle_id .. ' not responding, removing from update queue')
-            table.remove(state.update_queue, 1)
-            turtle.update_wait_start = nil
-            process_update_queue()
-        end
-        return
-    end
-    
-    -- Clear wait timer if turtle now has data
-    turtle.update_wait_start = nil
-    
-    -- Check turtle location
-    local is_home = false
-    local is_at_disk = false
-    if turtle.data and turtle.data.location then
-        is_home = (config.locations.home_area and basics.in_area(turtle.data.location, config.locations.home_area)) or
-                  basics.in_area(turtle.data.location, config.locations.greater_home_area)
-        is_at_disk = basics.in_location(turtle.data.location, config.locations.disk_drive)
-    end
-    
-    if is_at_disk then
-        -- Turtle is already at disk drive, send update command
-        if not turtle.update_sent_to_disk then
-            print('Turtle ' .. turtle_id .. ' already at disk drive. Starting update...')
-            state.update_in_progress = true
-            halt(turtle)
-            rednet.send(turtle.id, {
-                action = 'update',
-            }, 'mastermine')
-            turtle.update_sent_to_disk = true
-        end
-    elseif is_home then
-        -- Turtle is home, send to disk and update
-        if not turtle.update_sent_to_disk then
-            print('Sending turtle ' .. turtle_id .. ' to disk drive for update...')
-            state.update_in_progress = true
-            halt(turtle)
-            add_task(turtle, {
-                action = 'go_to_disk',
-                end_function = function()
-                    turtle.update_sent_to_disk = true
-                    -- Now send update command
-                    print('Turtle ' .. turtle_id .. ' at disk drive. Starting update...')
-                    rednet.send(turtle.id, {
-                        action = 'update',
-                    }, 'mastermine')
-                end
-            })
-            turtle.update_sent_to_disk = true
-        end
-    else
-        -- Send turtle home first
-        if not turtle.update_sent_home then
-            print('Sending turtle ' .. turtle_id .. ' home for update...')
-            state.update_in_progress = true
-            halt(turtle)
-            send_turtle_up(turtle)
-            add_task(turtle, {
-                action = 'go_to_home',
-                end_function = function()
-                    turtle.update_sent_home = true
-                    state.update_in_progress = false
-                    process_update_queue()
-                end
-            })
-            turtle.update_sent_home = true
         end
     end
+    return count
 end
 
 
 function on_update_complete(turtle_id)
     -- Called when a turtle completes its update
-    if not state.update_queue then
-        return
-    end
-    
-    -- Remove from queue
-    for i, id in ipairs(state.update_queue) do
-        if id == turtle_id then
-            table.remove(state.update_queue, i)
-            break
-        end
-    end
-    
     local turtle = state.turtles[turtle_id]
     if turtle then
-        turtle.update_pending = false
-        turtle.update_complete = true
+        print('Turtle ' .. turtle_id .. ' update complete!')
+        -- Turtle will initialize after update and report its version
+        -- The version check will determine if it needs to update again
+        -- For now, just clear update flags - version check will handle state transition
         turtle.update_sent_home = nil
         turtle.update_sent_to_disk = nil
-        print('Turtle ' .. turtle_id .. ' update complete!')
+        turtle.update_waiting_at_disk = nil
     end
-    
-    state.update_in_progress = false
-    
-    -- Process next turtle in queue
-    process_update_queue()
 end
 
 
@@ -1098,14 +922,30 @@ end
 
 
 function command_turtles()
-    -- Process update queue if active
-    if state.update_queue and #state.update_queue > 0 then
-        process_update_queue()
-    end
+    -- Check for out-of-date turtles and set them to updating state
+    check_turtle_versions()
     
-    -- Check for out-of-date turtles (only if not already processing updates)
-    if not state.update_in_progress then
-        check_turtle_versions()
+    -- Check if all updating turtles are done and update hub if needed
+    if state.update_hub_after then
+        local any_updating = false
+        for _, turtle in pairs(state.turtles) do
+            if turtle.data and turtle.state == 'updating' then
+                any_updating = true
+                break
+            end
+        end
+        
+        if not any_updating then
+            print('All turtles updated. Updating hub...')
+            sleep(1)
+            if state.force_update then
+                os.run({}, '/update', 'force')
+            else
+                os.run({}, '/update')
+            end
+            state.update_hub_after = false
+            state.force_update = false
+        end
     end
     
     local turtles_for_pair = {}
@@ -1264,6 +1104,99 @@ function command_turtles()
                 elseif turtle.state == 'mine' then
                     if config.use_chunky_turtles and not turtle.pair then
                         add_task(turtle, {action = 'pass', end_state = 'idle'})
+                    end
+                    
+                elseif turtle.state == 'updating' then
+                    -- TURTLE IS UPDATING
+                    -- Check if turtle needs to return home first
+                    local is_home = false
+                    local is_at_disk = false
+                    local is_near_home = false
+                    
+                    if turtle.data and turtle.data.location then
+                        is_home = (config.locations.home_area and basics.in_area(turtle.data.location, config.locations.home_area)) or
+                                  basics.in_area(turtle.data.location, config.locations.greater_home_area)
+                        is_at_disk = basics.in_location(turtle.data.location, config.locations.disk_drive)
+                        is_near_home = is_home or basics.in_area(turtle.data.location, config.locations.greater_home_area)
+                    end
+                    
+                    if is_at_disk then
+                        -- Turtle is at disk drive
+                        -- Mark that turtle has reached disk
+                        turtle.update_sent_to_disk = true
+                        
+                        -- Check if other turtles are updating (wait if so)
+                        local turtles_at_disk = count_turtles_at_disk()
+                        if turtles_at_disk > 1 then
+                            -- Another turtle is updating, wait
+                            if not turtle.update_waiting_at_disk then
+                                print('Turtle ' .. turtle.id .. ' waiting at disk drive (other turtle updating)...')
+                                turtle.update_waiting_at_disk = true
+                            end
+                            -- Just wait, don't send update command yet
+                        else
+                            -- No other turtles updating, proceed with update
+                            if not turtle.update_waiting_at_disk or turtle.update_waiting_at_disk then
+                                -- Clear waiting flag and send update command
+                                turtle.update_waiting_at_disk = nil
+                                print('Turtle ' .. turtle.id .. ' at disk drive. Starting update...')
+                                halt(turtle)
+                                rednet.send(turtle.id, {
+                                    action = 'update',
+                                }, 'mastermine')
+                            end
+                        end
+                    elseif is_near_home then
+                        -- Turtle is near home, navigate to disk drive
+                        if not turtle.update_sent_to_disk and not turtle.update_waiting_at_disk then
+                            halt(turtle)
+                            add_task(turtle, {
+                                action = 'go_to_disk',
+                                end_state = 'updating',  -- Stay in updating state
+                            })
+                            -- Don't set update_sent_to_disk yet - wait until turtle reaches disk
+                        end
+                    else
+                        -- Turtle needs to return home first
+                        if not turtle.update_sent_home then
+                            halt(turtle)
+                            send_turtle_up(turtle)
+                            add_task(turtle, {
+                                action = 'go_to_home',
+                                end_state = 'updating',  -- Stay in updating state
+                            })
+                            turtle.update_sent_home = true
+                        end
+                    end
+                    
+                    -- After update completes, turtle will initialize and check version
+                    -- If version is correct, check_turtle_versions will not set it to updating again
+                    -- So we need to check if turtle has correct version and transition out of updating state
+                    if turtle.data and turtle.data.version then
+                        local hub_version = get_hub_version()
+                        if hub_version then
+                            local comparison = compare_versions(turtle.data.version, hub_version)
+                            -- If turtle version matches or is newer, update is complete
+                            if comparison and comparison >= 0 then
+                                -- Update complete, return to waiting spot
+                                print('Turtle ' .. turtle.id .. ' update verified. Returning to waiting spot...')
+                                turtle.update_sent_home = nil
+                                turtle.update_sent_to_disk = nil
+                                turtle.update_waiting_at_disk = nil
+                                -- Return to waiting spot or idle based on state.on
+                                if state.on then
+                                    add_task(turtle, {
+                                        action = 'go_to_waiting_room',
+                                        end_state = 'idle',
+                                    })
+                                else
+                                    add_task(turtle, {
+                                        action = 'go_to_home',
+                                        end_state = 'park',
+                                    })
+                                end
+                            end
+                        end
                     end
                     
                 elseif turtle.state == 'following' then
