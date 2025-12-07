@@ -610,12 +610,10 @@ function check_turtle_versions()
     local out_of_date_turtles = {}
     
     for _, turtle in pairs(state.turtles) do
-        if turtle.data and turtle.data.version then
-            local turtle_version = turtle.data.version
-            local comparison = compare_versions(turtle_version, hub_version)
-            
-            -- If turtle version is older than hub version, queue for update
-            if comparison and comparison < 0 then
+        -- Only check turtles that have data
+        if turtle.data then
+            -- If turtle has no version data, consider it out of date
+            if not turtle.data.version then
                 -- Check if turtle is already queued for update
                 local already_queued = false
                 if state.update_queue then
@@ -630,6 +628,28 @@ function check_turtle_versions()
                 -- Check if turtle is currently updating
                 if not already_queued and not turtle.update_pending and not turtle.update_complete then
                     table.insert(out_of_date_turtles, turtle)
+                end
+            elseif turtle.data.version then
+                local turtle_version = turtle.data.version
+                local comparison = compare_versions(turtle_version, hub_version)
+                
+                -- If turtle version is older than hub version, queue for update
+                if comparison and comparison < 0 then
+                    -- Check if turtle is already queued for update
+                    local already_queued = false
+                    if state.update_queue then
+                        for _, queued_id in ipairs(state.update_queue) do
+                            if queued_id == turtle.id then
+                                already_queued = true
+                                break
+                            end
+                        end
+                    end
+                    
+                    -- Check if turtle is currently updating
+                    if not already_queued and not turtle.update_pending and not turtle.update_complete then
+                        table.insert(out_of_date_turtles, turtle)
+                    end
                 end
             end
         end
@@ -942,12 +962,32 @@ function user_input(input)
                 else
                     print('Updating hub and all turtles...')
                 end
-                -- Queue all turtles for update
+                -- Queue all turtles for update (even if they don't have version data)
                 local turtle_list = {}
                 for _, turtle in pairs(state.turtles) do
                     table.insert(turtle_list, turtle)
                 end
-                queue_turtles_for_update(turtle_list, true, force_update)
+                
+                if #turtle_list == 0 then
+                    print('No turtles found. Waiting 2 seconds for turtles to report...')
+                    sleep(2)
+                    -- Try again after waiting
+                    turtle_list = {}
+                    for _, turtle in pairs(state.turtles) do
+                        table.insert(turtle_list, turtle)
+                    end
+                    if #turtle_list == 0 then
+                        print('No turtles found. Updating hub only...')
+                        -- Update hub only if no turtles found
+                        queue_turtles_for_update({}, true, force_update)
+                    else
+                        print('Found ' .. #turtle_list .. ' turtle(s). Queuing for update...')
+                        queue_turtles_for_update(turtle_list, true, force_update)
+                    end
+                else
+                    print('Found ' .. #turtle_list .. ' turtle(s). Queuing for update...')
+                    queue_turtles_for_update(turtle_list, true, force_update)
+                end
             end
         elseif command == 'return' then
             -- BRING TURTLE HOME
