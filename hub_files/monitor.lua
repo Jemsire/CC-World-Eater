@@ -1,5 +1,5 @@
--- Load shared APIs (config, state, utilities)
-loadfile('init_apis.lua')()
+-- Load all APIs through init_apis.lua (handles all API loading)
+loadfile('/init_apis.lua')()
 
 menu_lines = {
     '##### ##### ##### ##### #####',

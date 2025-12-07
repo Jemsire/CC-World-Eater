@@ -3,19 +3,11 @@
 -- Loads modules and coordinates mining operations
 -- ============================================
 
--- Load shared APIs (config, state, utilities)
+-- Load all APIs through init_apis.lua (handles all API loading)
 loadfile('/init_apis.lua')()
 
 inf = utilities.inf
 str_xyz = utilities.str_xyz
-
--- Load modules using loadfile()
-loadfile('apis/block_management')()
-loadfile('apis/turtle_assignment')()
-loadfile('apis/version_management')()
-loadfile('apis/task_management')()
-loadfile('apis/user_commands')()
-loadfile('apis/state_machine')()
 
 function main()
     -- INCREASE SESSION ID BY ONE

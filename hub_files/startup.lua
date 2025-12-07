@@ -2,15 +2,8 @@
 os.setComputerLabel('Hub')
 
 -- INITIALIZE APIS
--- Use loadfile() to load APIs
-loadfile('init_apis.lua')()
--- Other apis
-loadfile('apis/block_management.lua')()
-loadfile('apis/turtle_assignment.lua')()
-loadfile('apis/version_management.lua')()
-loadfile('apis/task_management.lua')()
-loadfile('apis/user_commands.lua')()
-loadfile('apis/state_machine.lua')()
+-- Load all APIs through init_apis.lua (handles all API loading)
+loadfile('/init_apis.lua')()
 
 -- Calculate disk drive location dynamically (1 block below hub computer)
 -- Disk drive is always 1 block below the hub computer, not relative to hub_reference

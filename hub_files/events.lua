@@ -1,8 +1,5 @@
--- Load shared APIs (config, state, utilities)
+-- Load all APIs through init_apis.lua (handles all API loading)
 loadfile('/init_apis.lua')()
-
--- Load modules needed by events.lua
-loadfile('/apis/version_management')()
 
 while true do
     event = {os.pullEvent()}
