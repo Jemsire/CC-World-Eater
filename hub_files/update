@@ -1,6 +1,7 @@
 -- WORLD EATER: Hub Update Script
 -- Downloads files from GitHub and updates the hub system
--- Usage: update [force] [force-config]
+-- Usage: update [dev] [force] [force-config]
+--   dev: If provided, will use latest commits from main branch (dev mode)
 --   force: If provided, will update even if versions match
 --   force-config: If provided, will also update config files
 
@@ -8,12 +9,16 @@ local GITHUB_REPO = "Jemsire/CC-World-Eater"
 local GITHUB_BRANCH = "main"  -- Fallback if no releases found
 local GITHUB_BASE = nil  -- Will be set after getting latest release tag
 
--- Check for force and force-config arguments
+-- Check for dev, force and force-config arguments
+local dev_mode = false
 local force_update = false
 local force_config = false
 if arg then
     for _, arg_val in ipairs(arg) do
-        if arg_val == "force" then
+        if arg_val == "dev" then
+            dev_mode = true
+            print("Dev mode: Using latest commits from main branch")
+        elseif arg_val == "force" then
             force_update = true
             print("Force update mode: Will update even if versions match")
         elseif arg_val == "force-config" then
@@ -123,19 +128,28 @@ if not github_api then
 end
 
 -- Get latest release tag and set GITHUB_BASE accordingly
-print("Checking for latest release...")
-local latest_tag = github_api.get_latest_release_tag(GITHUB_REPO)
-if latest_tag then
-    -- Remove 'v' prefix if present (e.g., "v0.1.0" -> "0.1.0")
-    local tag_for_url = string.gsub(latest_tag, "^v", "")
-    GITHUB_BASE = "https://raw.githubusercontent.com/" .. GITHUB_REPO .. "/" .. latest_tag
-    print("Using latest release: " .. latest_tag)
-else
-    -- Fallback to main branch if no releases found
+local latest_tag = nil
+if dev_mode then
+    -- Dev mode: Use main branch directly (latest commits)
     GITHUB_BASE = "https://raw.githubusercontent.com/" .. GITHUB_REPO .. "/" .. GITHUB_BRANCH
-    print("No releases found, using " .. GITHUB_BRANCH .. " branch")
+    print("Dev mode: Using latest commits from " .. GITHUB_BRANCH .. " branch")
+    print("")
+else
+    -- Normal mode: Use latest release tag (version locked)
+    print("Checking for latest release...")
+    latest_tag = github_api.get_latest_release_tag(GITHUB_REPO)
+    if latest_tag then
+        -- Remove 'v' prefix if present (e.g., "v0.1.0" -> "0.1.0")
+        local tag_for_url = string.gsub(latest_tag, "^v", "")
+        GITHUB_BASE = "https://raw.githubusercontent.com/" .. GITHUB_REPO .. "/" .. latest_tag
+        print("Using latest release: " .. latest_tag)
+    else
+        -- Fallback to main branch if no releases found
+        GITHUB_BASE = "https://raw.githubusercontent.com/" .. GITHUB_REPO .. "/" .. GITHUB_BRANCH
+        print("No releases found, using " .. GITHUB_BRANCH .. " branch")
+    end
+    print("")
 end
-print("")
 
 -- Download file list from GitHub using API (dynamic discovery)
 local function get_hub_files()
@@ -239,9 +253,8 @@ end
 
 -- Function to get remote version from GitHub
 local function get_remote_version()
-    -- Use latest tag if available, otherwise fallback to main branch
-    local base_url = latest_tag and ("https://raw.githubusercontent.com/" .. GITHUB_REPO .. "/" .. latest_tag) or GITHUB_BASE
-    local url = base_url .. "/hub_files/version.lua"
+    -- Use GITHUB_BASE which is already set based on dev_mode or latest_tag
+    local url = GITHUB_BASE .. "/hub_files/version.lua"
     local response = http.get(url)
     if response then
         local content = response.readAll()
@@ -274,60 +287,72 @@ local local_str = format_version(local_version)
 local remote_str = format_version(remote_version)
 
 print("Current version: " .. (local_str or "not found"))
-print("Remote version: " .. (remote_str or "unknown"))
+if dev_mode then
+    print("Remote version (dev): " .. (remote_str or "unknown") .. " (latest commits)")
+else
+    print("Remote version: " .. (remote_str or "unknown"))
+end
 print("")
 
--- If we have local version, check if update is needed
+-- In dev mode, skip version comparison and always update
+-- Otherwise, check if update is needed
 if local_version then
-    local comparison = compare_versions(local_version, remote_version)
-    if comparison and comparison >= 0 then
-        if force_update then
-            print("Force update mode: Updating despite matching versions...")
-            print("")
-        else
-            print("Already up-to-date! No update needed.")
-            print("(Use 'update force' to force update, or 'update force-config' to update config files)")
-            return
+    -- Check version comparison only in non-dev mode
+    if not dev_mode then
+        local comparison = compare_versions(local_version, remote_version)
+        if comparison and comparison >= 0 then
+            if force_update then
+                print("Force update mode: Updating despite matching versions...")
+                print("")
+            else
+                print("Already up-to-date! No update needed.")
+                print("(Use 'update force' to force update, 'update dev' for dev mode, or 'update force-config' to update config files)")
+                return
+            end
         end
-    end
-    
-    -- Check if this is a major version update
-    local is_major_update = false
-    if remote_version.major > (local_version.major or 0) then
-        is_major_update = true
-    end
-    
-    -- Prompt for major version updates
-    if is_major_update then
-        print("========================================")
-        print("  MAJOR VERSION UPDATE DETECTED")
-        print("========================================")
-        print("You are updating from " .. local_str .. " to " .. remote_str)
-        print("")
-        print("WARNING: Major version updates may include:")
-        print("  - Breaking changes to configuration files")
-        print("  - Changes to file structure or locations")
-        print("  - Incompatible changes requiring manual intervention")
-        print("  - Changes that may affect turtle compatibility")
-        print("")
-        print("It is recommended to:")
-        print("  - Backup your current configuration")
-        print("  - Review the changelog/release notes")
-        print("  - Update config files manually if needed")
-        print("")
-        print("Do you want to proceed with this major update?")
-        print("Type 'yes' to continue, anything else to cancel:")
-        print("")
         
-        -- Read user input
-        local user_input = read()
-        if user_input ~= "yes" then
-            print("")
-            print("Update cancelled by user.")
-            return
+        -- Check if this is a major version update (skip in dev mode)
+        local is_major_update = false
+        if remote_version.major > (local_version.major or 0) then
+            is_major_update = true
         end
-        print("")
-        print("Proceeding with major version update...")
+        
+        -- Prompt for major version updates (skip in dev mode)
+        if is_major_update then
+            print("========================================")
+            print("  MAJOR VERSION UPDATE DETECTED")
+            print("========================================")
+            print("You are updating from " .. local_str .. " to " .. remote_str)
+            print("")
+            print("WARNING: Major version updates may include:")
+            print("  - Breaking changes to configuration files")
+            print("  - Changes to file structure or locations")
+            print("  - Incompatible changes requiring manual intervention")
+            print("  - Changes that may affect turtle compatibility")
+            print("")
+            print("It is recommended to:")
+            print("  - Backup your current configuration")
+            print("  - Review the changelog/release notes")
+            print("  - Update config files manually if needed")
+            print("")
+            print("Do you want to proceed with this major update?")
+            print("Type 'yes' to continue, anything else to cancel:")
+            print("")
+            
+            -- Read user input
+            local user_input = read()
+            if user_input ~= "yes" then
+                print("")
+                print("Update cancelled by user.")
+                return
+            end
+            print("")
+            print("Proceeding with major version update...")
+            print("")
+        end
+    else
+        -- Dev mode: always update
+        print("Dev mode: Updating to latest commits from main branch...")
         print("")
     end
 else
@@ -337,6 +362,11 @@ end
 
 print("Downloading files from GitHub...")
 print("Repository: " .. GITHUB_REPO)
+if dev_mode then
+    print("Mode: DEV (latest commits from " .. GITHUB_BRANCH .. " branch)")
+else
+    print("Mode: RELEASE (version locked to " .. (latest_tag or GITHUB_BRANCH) .. ")")
+end
 print("")
 
 local updated_count = 0
