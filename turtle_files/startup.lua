@@ -2,24 +2,13 @@
 os.setComputerLabel('Turtle ' .. os.getComputerID())
 
 -- INITIALIZE APIS
--- Use loadfile() to load APIs
--- APIs are already in /apis/ folder (copied by turtle.lua)
-loadfile('apis/config')()
--- Create config table to reference globals from config.lua (for compatibility with code that uses config.*)
--- Note: Most config is loaded from hub during initialization, this is just for turtle-specific defaults
-config = {
-    bedrock_level = bedrock_level
-    -- Other config properties (locations, use_chunky_turtles, etc.) will be set by hub during initialization
-}
-loadfile('apis/state')()
-utilities = loadfile('apis/utilities')()
-loadfile('apis/movement')()
-loadfile('apis/navigation')()
-loadfile('apis/detection')()
-loadfile('apis/item_management')()
-loadfile('apis/mining')()
-loadfile('apis/turtle_utilities')()
-loadfile('apis/actions')()
+-- Load all APIs through init_apis.lua (handles all API loading)
+loadfile('/init_apis.lua')()
+
+-- Get references from API class (for compatibility, globals are also set)
+local config = API.getConfig()
+local state = API.getState()
+local utilities = API.getUtilities()
 
 
 -- OPEN REDNET
