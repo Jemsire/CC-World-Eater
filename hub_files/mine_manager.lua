@@ -581,6 +581,16 @@ function get_hub_version()
 end
 
 
+function is_dev_version(version)
+    -- Check if version has DEV suffix/flag
+    if not version or type(version) ~= "table" then
+        return false
+    end
+    -- Check for dev field (boolean) or dev_suffix field (string)
+    return version.dev == true or (version.dev_suffix and version.dev_suffix == "-DEV")
+end
+
+
 function compare_versions(v1, v2)
     -- Compare two semantic versions
     -- Returns: -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
@@ -617,8 +627,11 @@ function check_turtle_versions()
         if turtle.data and turtle.state ~= 'updating' and turtle.state ~= 'halt' and not turtle.update_complete then
             local needs_update = false
             
+            -- Check if turtle has force_update flag set (from dev force update or manual command)
+            if turtle.force_update then
+                needs_update = true
             -- If turtle has no version data, consider it out of date
-            if not turtle.data.version then
+            elseif not turtle.data.version then
                 needs_update = true
             elseif turtle.data.version then
                 local turtle_version = turtle.data.version
@@ -631,7 +644,12 @@ function check_turtle_versions()
             end
                     
             if needs_update then
-                print('Turtle ' .. turtle.id .. ' is out of date. Setting to updating state...')
+                if turtle.force_update then
+                    print('Turtle ' .. turtle.id .. ' force update requested. Setting to updating state...')
+                    turtle.force_update = nil  -- Clear flag after using it
+                else
+                    print('Turtle ' .. turtle.id .. ' is out of date. Setting to updating state...')
+                end
                 -- Free turtle from any block assignment
                 free_turtle(turtle)
                 -- Clear tasks and set to updating state
@@ -745,9 +763,12 @@ function verify_turtle_version_after_update(turtle)
     
     if comparison and comparison >= 0 then
         -- Version is correct, update successful
-        print('Turtle ' .. turtle.id .. ' version verified: ' .. 
-              turtle_version.major .. '.' .. turtle_version.minor .. '.' .. turtle_version.hotfix .. 
-              ' (hub: ' .. hub_version.major .. '.' .. hub_version.minor .. '.' .. hub_version.hotfix .. ')')
+        local turtle_version_str = turtle_version.major .. '.' .. turtle_version.minor .. '.' .. turtle_version.hotfix
+        local hub_version_str = hub_version.major .. '.' .. hub_version.minor .. '.' .. hub_version.hotfix
+        if is_dev_version(hub_version) then
+            hub_version_str = hub_version_str .. '-DEV'
+        end
+        print('Turtle ' .. turtle.id .. ' version verified: ' .. turtle_version_str .. ' (hub: ' .. hub_version_str .. ')')
         turtle.update_complete = nil
         turtle.update_sent_home = nil
         turtle.update_sent_to_disk = nil
@@ -770,9 +791,12 @@ function verify_turtle_version_after_update(turtle)
         return true
     else
         -- Version is still wrong, needs another update
-        print('Turtle ' .. turtle.id .. ' version still incorrect after update: ' .. 
-              (turtle_version and (turtle_version.major .. '.' .. turtle_version.minor .. '.' .. turtle_version.hotfix) or 'unknown') .. 
-              ' (hub: ' .. hub_version.major .. '.' .. hub_version.minor .. '.' .. hub_version.hotfix .. ')')
+        local turtle_version_str = turtle_version and (turtle_version.major .. '.' .. turtle_version.minor .. '.' .. turtle_version.hotfix) or 'unknown'
+        local hub_version_str = hub_version.major .. '.' .. hub_version.minor .. '.' .. hub_version.hotfix
+        if is_dev_version(hub_version) then
+            hub_version_str = hub_version_str .. '-DEV'
+        end
+        print('Turtle ' .. turtle.id .. ' version still incorrect after update: ' .. turtle_version_str .. ' (hub: ' .. hub_version_str .. ')')
         print('Turtle ' .. turtle.id .. ' will update again...')
         -- Reset update flags so it can update again
         turtle.update_complete = nil
@@ -1035,6 +1059,35 @@ function command_turtles()
             -- Check if turtle that completed update now has version data to verify
             if turtle.update_complete and turtle.data and turtle.data.version then
                 verify_turtle_version_after_update(turtle)
+            end
+            
+            -- After initialization completes (session_id matches), check if turtle needs update
+            -- This ensures turtles are checked for updates right after they finish initializing
+            -- We check this explicitly here because check_turtle_versions() runs at the start of command_turtles()
+            -- and might miss turtles that just finished initializing
+            if turtle.data.session_id == session_id and turtle.state ~= 'updating' and turtle.state ~= 'halt' and not turtle.update_complete then
+                local hub_version = get_hub_version()
+                if hub_version then
+                    local needs_update = false
+                    
+                    if not turtle.data.version then
+                        -- No version data means turtle is out of date
+                        needs_update = true
+                    else
+                        local turtle_version = turtle.data.version
+                        local comparison = compare_versions(turtle_version, hub_version)
+                        if comparison and comparison < 0 then
+                            needs_update = true
+                        end
+                    end
+                    
+                    if needs_update then
+                        print('Turtle ' .. turtle.id .. ' is out of date after initialization. Setting to updating state...')
+                        free_turtle(turtle)
+                        turtle.tasks = {}
+                        add_task(turtle, {action = 'pass', end_state = 'updating'})
+                    end
+                end
             end
 
             if #turtle.tasks > 0 then
@@ -1311,7 +1364,39 @@ function main()
     -- Find the closest unmined block
     gen_next_block()
     
+    -- DEV: Check if hub version has DEV suffix - if so, force update all turtles
+    local hub_version = get_hub_version()
+    if hub_version and is_dev_version(hub_version) then
+        print('DEV: Hub version has -DEV suffix. Will force update all turtles...')
+        -- Wait a bit for turtles to report, then queue them for force update
+        state.dev_force_update_pending = true
+        state.dev_force_update_wait = 0
+    end
+    
     while true do
+        -- DEV: Handle force update after waiting for turtles to report
+        if state.dev_force_update_pending then
+            state.dev_force_update_wait = (state.dev_force_update_wait or 0) + 1
+            -- Wait 5 seconds (50 cycles at 0.1s each) for turtles to report
+            if state.dev_force_update_wait >= 50 then
+                print('DEV: Force updating all turtles...')
+                local turtle_list = {}
+                for _, turtle in pairs(state.turtles) do
+                    if turtle.data then
+                        table.insert(turtle_list, turtle)
+                    end
+                end
+                if #turtle_list > 0 then
+                    queue_turtles_for_update(turtle_list, false, true)  -- force_update = true
+                else
+                    print('DEV: No turtles found. Will check again in 5 seconds...')
+                    state.dev_force_update_wait = 0  -- Reset counter to check again
+                end
+                state.dev_force_update_pending = false
+                state.dev_force_update_wait = nil
+            end
+        end
+        
         user_input()         -- PROCESS USER INPUT
         command_turtles()    -- COMMAND TURTLES
         sleep(0.1)           -- DELAY 0.1 SECONDS

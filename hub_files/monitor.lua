@@ -811,9 +811,14 @@ function get_version()
 end
 
 function format_version(version)
-    -- Format version table as "MAJOR.MINOR.HOTFIX"
+    -- Format version table as "MAJOR.MINOR.HOTFIX" or "MAJOR.MINOR.HOTFIX-DEV"
     if version and type(version) == "table" then
-        return string.format("%d.%d.%d", version.major or 0, version.minor or 0, version.hotfix or 0)
+        local version_str = string.format("%d.%d.%d", version.major or 0, version.minor or 0, version.hotfix or 0)
+        -- Add DEV suffix if present
+        if version.dev_suffix == "-DEV" or version.dev == true then
+            version_str = version_str .. "-DEV"
+        end
+        return version_str
     end
     return nil
 end

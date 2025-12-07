@@ -194,10 +194,15 @@ print("========================================")
 print("  World Eater Hub Update")
 print("========================================")
 
--- Function to format version table as string "MAJOR.MINOR.HOTFIX"
+-- Function to format version table as string "MAJOR.MINOR.HOTFIX" or "MAJOR.MINOR.HOTFIX-DEV"
 local function format_version(version)
     if version and type(version) == "table" then
-        return string.format("%d.%d.%d", version.major or 0, version.minor or 0, version.hotfix or 0)
+        local version_str = string.format("%d.%d.%d", version.major or 0, version.minor or 0, version.hotfix or 0)
+        -- Add DEV suffix if present
+        if version.dev_suffix == "-DEV" or version.dev == true then
+            version_str = version_str .. "-DEV"
+        end
+        return version_str
     end
     return nil
 end
@@ -476,6 +481,15 @@ if updated_count > 0 and error_count == 0 and remote_version then
         hotfix = remote_version.hotfix or 0
     }
     
+    -- Add DEV suffix if updating in dev mode, otherwise ensure it's removed
+    if dev_mode then
+        new_version.dev_suffix = "-DEV"
+        new_version.dev = true
+    else
+        new_version.dev_suffix = nil
+        new_version.dev = false
+    end
+    
     local version_path = drive_path .. "/hub_files/version.lua"
     
     -- Create directory if needed
@@ -489,14 +503,29 @@ if updated_count > 0 and error_count == 0 and remote_version then
         version_file.write("-- World Eater Hub Version\n")
         version_file.write("-- This version number matches the version from GitHub\n")
         version_file.write("-- Version format: semantic versioning MAJOR.MINOR.HOTFIX\n")
-        version_file.write("-- Returns: {major=1, minor=0, hotfix=0}\n")
+        if dev_mode then
+            version_file.write("-- DEV MODE: This version has -DEV suffix and will force update turtles\n")
+        end
+        version_file.write("-- Returns: {major=1, minor=0, hotfix=0, dev_suffix=\"-DEV\"}\n")
         version_file.write("return {\n")
         version_file.write("    major = " .. tostring(new_version.major) .. ",\n")
         version_file.write("    minor = " .. tostring(new_version.minor) .. ",\n")
-        version_file.write("    hotfix = " .. tostring(new_version.hotfix) .. "\n")
+        version_file.write("    hotfix = " .. tostring(new_version.hotfix) .. ",\n")
+        if dev_mode then
+            version_file.write("    dev_suffix = \"-DEV\",\n")
+            version_file.write("    dev = true\n")
+        else
+            version_file.write("    dev_suffix = nil,\n")
+            version_file.write("    dev = false\n")
+        end
         version_file.write("}\n")
         version_file.close()
-        print(string.format("  Version updated to: %s", format_version(new_version)))
+        local version_str = format_version(new_version)
+        if dev_mode then
+            print(string.format("  Version updated to: %s-DEV (dev mode)", version_str))
+        else
+            print(string.format("  Version updated to: %s", version_str))
+        end
     end
 end
 
