@@ -3,44 +3,14 @@ os.setComputerLabel('Hub')
 
 -- INITIALIZE APIS
 -- Use loadfile() to load APIs
--- APIs are already in /apis/ folder (copied by hub.lua)
-loadfile('config.lua')()
--- Create config table to reference globals from config.lua (for compatibility with code that uses config.*)
-config = {
-    locations = locations,
-    use_chunky_turtles = use_chunky_turtles,
-    fuel_padding = fuel_padding,
-    fuel_per_unit = fuel_per_unit,
-    turtle_timeout = turtle_timeout,
-    pocket_timeout = pocket_timeout,
-    task_timeout = task_timeout,
-    dig_disallow = dig_disallow,
-    paths = paths,
-    mining_turtle_locations = mining_turtle_locations,
-    chunky_turtle_locations = chunky_turtle_locations,
-    gravitynames = gravitynames,
-    orenames = orenames,
-    blocktags = blocktags,
-    fuelnames = fuelnames,
-    monitor_max_zoom_level = monitor_max_zoom_level,
-    default_monitor_zoom_level = default_monitor_zoom_level,
-    default_monitor_location = default_monitor_location,
-    hub_reference = hub_reference,
-    mining_center = mining_center,
-    bedrock_level = bedrock_level,
-    mining_radius = mining_radius,
-    mining_area = mining_area,
-    mine_entrance = mine_entrance,
-    c = c
-}
-loadfile('state.lua')()
-utilities = loadfile('apis/utilities.lua')()
-loadfile('block_management.lua')()
-loadfile('turtle_assignment.lua')()
-loadfile('version_management.lua')()
-loadfile('task_management.lua')()
-loadfile('user_commands.lua')()
-loadfile('state_machine.lua')()
+loadfile('/init_apis.lua')()
+-- Other apis
+loadfile('/apis/block_management.lua')()
+loadfile('/apis/turtle_assignment.lua')()
+loadfile('/apis/version_management.lua')()
+loadfile('/apis/task_management.lua')()
+loadfile('/apis/user_commands.lua')()
+loadfile('/apis/state_machine.lua')()
 
 -- Calculate disk drive location dynamically (1 block below hub computer)
 -- Disk drive is always 1 block below the hub computer, not relative to hub_reference
