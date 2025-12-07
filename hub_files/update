@@ -453,6 +453,10 @@ if #shared_files > 0 then
                     if hub_dir and hub_dir ~= "" then
                         fs.makeDir(hub_dir)
                     end
+                    -- Delete existing file if it exists
+                    if fs.exists(hub_dest) then
+                        fs.delete(hub_dest)
+                    end
                     fs.copy(temp_path, hub_dest)
                     print("    ✓ Copied to hub_files/utilities.lua")
                     
@@ -461,6 +465,10 @@ if #shared_files > 0 then
                     local turtle_dir = string.match(turtle_dest, "^(.-)[^/\\]*$")
                     if turtle_dir and turtle_dir ~= "" then
                         fs.makeDir(turtle_dir)
+                    end
+                    -- Delete existing file if it exists
+                    if fs.exists(turtle_dest) then
+                        fs.delete(turtle_dest)
                     end
                     fs.copy(temp_path, turtle_dest)
                     print("    ✓ Copied to turtle_files/utilities.lua")
