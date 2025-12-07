@@ -48,10 +48,14 @@ function send_tasks(turtle)
             if task.action ~= 'pass' or not task.end_state then
                 print(string.format('Sending %s directive to %d', task.action, turtle.id))
             end
+            -- Use -1 for request_id to ensure commands are processed
+            -- The turtle checks: message.request_id == -1 or message.request_id == state.request_id
+            -- Using -1 ensures the command is always processed, avoiding request_id synchronization issues
+            -- Commands are still processed sequentially by the turtle's single-threaded request handler
             rednet.send(turtle.id, {
                 action = task.action,
                 data = task.data,
-                request_id = turtle_data.request_id
+                request_id = -1
             }, 'mastermine')
         end
     end
