@@ -1,34 +1,36 @@
-inf = 1e309
+local utilities = {}
 
-bumps = {
+utilities.inf = 1e309
+
+utilities.bumps = {
     north = { 0,  0, -1},
     south = { 0,  0,  1},
     east  = { 1,  0,  0},
     west  = {-1,  0,  0},
 }
 
-left_shift = {
+utilities.left_shift = {
     north = 'west',
     south = 'east',
     east  = 'north',
     west  = 'south',
 }
 
-right_shift = {
+utilities.right_shift = {
     north = 'east',
     south = 'west',
     east  = 'south',
     west  = 'north',
 }
 
-reverse_shift = {
+utilities.reverse_shift = {
     north = 'south',
     south = 'north',
     east  = 'west',
     west  = 'east',
 }
 
-function dprint(thing)
+function utilities.dprint(thing)
     -- PRINT; IF TABLE PRINT EACH ITEM
     if type(thing) == 'table' then
         for k, v in pairs(thing) do
@@ -41,7 +43,7 @@ function dprint(thing)
 end
 
 
-function str_xyz(coords, facing)
+function utilities.str_xyz(coords, facing)
     if facing then
         return coords.x .. ',' .. coords.y .. ',' .. coords.z .. ':' .. facing
     else
@@ -50,14 +52,14 @@ function str_xyz(coords, facing)
 end
 
 
-function distance(point_1, point_2)
+function utilities.distance(point_1, point_2)
     return math.abs(point_1.x - point_2.x)
          + math.abs(point_1.y - point_2.y)
          + math.abs(point_1.z - point_2.z)
 end
 
 
-function in_area(xyz, area)
+function utilities.in_area(xyz, area)
     if not area or not xyz then
         return false
     end
@@ -65,7 +67,7 @@ function in_area(xyz, area)
 end
 
 
-function in_location(xyzo, location)
+function utilities.in_location(xyzo, location)
     for _, axis in pairs({'x', 'y', 'z'}) do
         if location[axis] then
             if location[axis] ~= xyzo[axis] then
@@ -75,4 +77,6 @@ function in_location(xyzo, location)
     end
     return true
 end
+
+return utilities
 
