@@ -3,7 +3,7 @@ os.setComputerLabel('Hub')
 
 -- INITIALIZE APIS
 -- Use loadfile() to load APIs
-loadfile('/init_apis.lua')()
+loadfile('init_apis.lua')()
 -- Other apis
 loadfile('apis/block_management.lua')()
 loadfile('apis/turtle_assignment.lua')()

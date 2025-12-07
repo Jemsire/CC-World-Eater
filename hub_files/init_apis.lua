@@ -3,62 +3,45 @@
 -- Load this file at the start of any thread that needs APIs
 -- ============================================
 
--- Load config if not already loaded
+-- Determine the base path for loading files
+-- If this file is loaded from root (/), use absolute paths
+-- If loaded relatively, try to detect the correct path
+local function get_api_path(filename)
+    -- Try absolute path first (most reliable)
+    if fs.exists('/apis/' .. filename) then
+        return '/apis/' .. filename
+    end
+    -- Fallback to relative path
+    return 'apis/' .. filename
+end
+
+-- Load config if not already loaded (config.lua creates the config table itself)
 if not config then
-    loadfile('apis/config.lua')()
-    -- Create config table to reference globals from config.lua
-    config = {
-        locations = locations,
-        use_chunky_turtles = use_chunky_turtles,
-        fuel_padding = fuel_padding,
-        fuel_per_unit = fuel_per_unit,
-        turtle_timeout = turtle_timeout,
-        pocket_timeout = pocket_timeout,
-        task_timeout = task_timeout,
-        dig_disallow = dig_disallow,
-        paths = paths,
-        mining_turtle_locations = mining_turtle_locations,
-        chunky_turtle_locations = chunky_turtle_locations,
-        gravitynames = gravitynames,
-        orenames = orenames,
-        blocktags = blocktags,
-        fuelnames = fuelnames,
-        monitor_max_zoom_level = monitor_max_zoom_level,
-        default_monitor_zoom_level = default_monitor_zoom_level,
-        default_monitor_location = default_monitor_location,
-        hub_reference = hub_reference,
-        mining_center = mining_center,
-        bedrock_level = bedrock_level,
-        mining_radius = mining_radius,
-        mining_area = mining_area,
-        mine_entrance = mine_entrance,
-        c = c
-    }
+    local config_path = get_api_path('config.lua')
+    loadfile(config_path)()
 end
 
--- Load state if not already loaded
+-- Load state if not already loaded (state.lua creates the state table itself)
 if not state then
-    loadfile('apis/state.lua')()
-    -- Create state table to reference globals from state.lua (for compatibility with code that uses state.*)
-    -- Make sure the globals exist before referencing them
-    state = {
-        user_input = user_input or {},
-        turtles = turtles or {},
-        pockets = pockets or {},
-        homes = homes or {}
-    }
+    local state_path = get_api_path('state.lua')
+    loadfile(state_path)()
 end
 
--- Load utilities if not already loaded
+-- Load utilities if not already loaded (utilities.lua returns a table)
 if not utilities then
-    utilities = loadfile('apis/utilities.lua')()
+    local utilities_path = get_api_path('utilities.lua')
+    utilities = loadfile(utilities_path)()
+    if not utilities then
+        error("Failed to load utilities.lua")
+    end
 end
 
 -- Create a global API registry for easy access
 -- This allows code to access APIs through a single object
 if not apis then
     apis = {}
+    apis.config = config
+    apis.state = state
     apis.utilities = utilities
-    -- Other APIs can be added here as needed
 end
 
