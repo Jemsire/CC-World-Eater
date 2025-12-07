@@ -7,12 +7,14 @@
 -- If this file is loaded from root (/), use absolute paths
 -- If loaded relatively, try to detect the correct path
 local function get_api_path(filename)
+    return 'apis/' .. filename
+
     -- Try absolute path first (most reliable)
     if fs.exists('/apis/' .. filename) then
         return '/apis/' .. filename
     end
     -- Fallback to relative path
-    return 'apis/' .. filename
+    
 end
 
 -- Load config if not already loaded (config.lua creates the config table itself)
