@@ -5,7 +5,7 @@
 
 -- Load config if not already loaded
 if not config then
-    loadfile('/apis/config.lua')()
+    loadfile('apis/config.lua')()
     -- Create config table to reference globals from config.lua
     config = {
         locations = locations,
@@ -38,7 +38,7 @@ end
 
 -- Load state if not already loaded
 if not state then
-    loadfile('/apis/state.lua')()
+    loadfile('apis/state.lua')()
 end
 
 -- Load utilities if not already loaded
