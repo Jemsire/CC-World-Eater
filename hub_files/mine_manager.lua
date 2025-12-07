@@ -541,7 +541,12 @@ function initialize_turtle(turtle)
     local data = {session_id, config}
     
     if turtle.state ~= 'halt' then
-        turtle.state = 'lost'
+        -- If turtle just completed an update, keep it in updating state until version is verified
+        if turtle.update_complete then
+            turtle.state = 'updating'
+        else
+            turtle.state = 'lost'
+        end
     end
     turtle.task_id = 2
     turtle.tasks = {}
@@ -608,8 +613,8 @@ function check_turtle_versions()
     end
     
     for _, turtle in pairs(state.turtles) do
-        -- Only check turtles that have data and are not already updating
-        if turtle.data and turtle.state ~= 'updating' and turtle.state ~= 'halt' then
+        -- Only check turtles that have data, are not already updating, and are not awaiting version verification
+        if turtle.data and turtle.state ~= 'updating' and turtle.state ~= 'halt' and not turtle.update_complete then
             local needs_update = false
             
             -- If turtle has no version data, consider it out of date
@@ -624,7 +629,7 @@ function check_turtle_versions()
                     needs_update = true
                 end
             end
-            
+                    
             if needs_update then
                 print('Turtle ' .. turtle.id .. ' is out of date. Setting to updating state...')
                 -- Free turtle from any block assignment
@@ -661,12 +666,12 @@ function queue_turtles_for_update(turtle_list, update_hub_after, force_update)
             end
             
             if all_updated then
-                print('All turtles updated. Updating hub...')
-                sleep(1)
-                if force_update then
-                    os.run({}, '/update', 'force')
-                else
-                    os.run({}, '/update')
+            print('All turtles updated. Updating hub...')
+            sleep(1)
+            if force_update then
+                os.run({}, '/update', 'force')
+            else
+                os.run({}, '/update')
                 end
             end
         end
@@ -679,7 +684,7 @@ function queue_turtles_for_update(turtle_list, update_hub_after, force_update)
             -- Free turtle from any block assignment
             free_turtle(turtle)
             -- Clear tasks and set to updating state
-            turtle.tasks = {}
+        turtle.tasks = {}
             turtle.force_update = force_update or false
             add_task(turtle, {action = 'pass', end_state = 'updating'})
             print('Set turtle ' .. turtle.id .. ' to updating state')
@@ -694,12 +699,12 @@ end
 function count_turtles_at_disk()
     -- Count how many turtles are currently at the disk drive
     local count = 0
-    for _, turtle in pairs(state.turtles) do
+            for _, turtle in pairs(state.turtles) do
         if turtle.data and turtle.data.location and turtle.state == 'updating' then
             if basics.in_location(turtle.data.location, config.locations.disk_drive) then
                 count = count + 1
+                end
             end
-        end
     end
     return count
 end
@@ -709,13 +714,73 @@ function on_update_complete(turtle_id)
     -- Called when a turtle completes its update
     local turtle = state.turtles[turtle_id]
     if turtle then
-        print('Turtle ' .. turtle_id .. ' update complete!')
-        -- Turtle will initialize after update and report its version
-        -- The version check will determine if it needs to update again
-        -- For now, just clear update flags - version check will handle state transition
+        print('Turtle ' .. turtle_id .. ' update complete! Will verify version after initialization...')
+        -- Mark that this turtle just completed an update and needs version verification
+        -- The turtle will reboot and initialize, then we'll check its version
+        turtle.update_complete = true
         turtle.update_sent_home = nil
         turtle.update_sent_to_disk = nil
         turtle.update_waiting_at_disk = nil
+        -- Keep turtle in updating state - it will be verified after initialization
+    end
+end
+
+
+function verify_turtle_version_after_update(turtle)
+    -- Verify turtle version after it has updated and initialized
+    -- Called when turtle reports version data after completing an update
+    local hub_version = get_hub_version()
+    if not hub_version then
+        -- Can't verify without hub version
+        return false
+    end
+    
+    if not turtle.data or not turtle.data.version then
+        -- Turtle hasn't reported version yet
+        return false
+    end
+    
+    local turtle_version = turtle.data.version
+    local comparison = compare_versions(turtle_version, hub_version)
+    
+    if comparison and comparison >= 0 then
+        -- Version is correct, update successful
+        print('Turtle ' .. turtle.id .. ' version verified: ' .. 
+              turtle_version.major .. '.' .. turtle_version.minor .. '.' .. turtle_version.hotfix .. 
+              ' (hub: ' .. hub_version.major .. '.' .. hub_version.minor .. '.' .. hub_version.hotfix .. ')')
+        turtle.update_complete = nil
+        turtle.update_sent_home = nil
+        turtle.update_sent_to_disk = nil
+        turtle.update_waiting_at_disk = nil
+        
+        -- Transition out of updating state (turtle might be in 'lost' state after initialization)
+        if turtle.state == 'updating' or turtle.state == 'lost' then
+            if state.on then
+                add_task(turtle, {
+                    action = 'go_to_waiting_room',
+                    end_state = 'idle',
+                })
+            else
+                add_task(turtle, {
+                    action = 'go_to_home',
+                    end_state = 'park',
+                })
+            end
+        end
+        return true
+    else
+        -- Version is still wrong, needs another update
+        print('Turtle ' .. turtle.id .. ' version still incorrect after update: ' .. 
+              (turtle_version and (turtle_version.major .. '.' .. turtle_version.minor .. '.' .. turtle_version.hotfix) or 'unknown') .. 
+              ' (hub: ' .. hub_version.major .. '.' .. hub_version.minor .. '.' .. hub_version.hotfix .. ')')
+        print('Turtle ' .. turtle.id .. ' will update again...')
+        -- Reset update flags so it can update again
+        turtle.update_complete = nil
+        turtle.update_sent_home = nil
+        turtle.update_sent_to_disk = nil
+        turtle.update_waiting_at_disk = nil
+        -- Keep in updating state to update again
+        return false
     end
 end
 
@@ -957,8 +1022,19 @@ function command_turtles()
             if turtle.data.session_id ~= session_id then
                 -- BABY TURTLE NEEDS TO LEARN
                 if (not turtle.tasks) or (not turtle.tasks[1]) or (not (turtle.tasks[1].action == 'initialize')) then
-                    initialize_turtle(turtle)
+                    -- Check if this turtle just completed an update and needs version verification
+                    if turtle.update_complete then
+                        -- Turtle just updated and is initializing - verify version after initialization completes
+                        initialize_turtle(turtle)
+                    else
+                        initialize_turtle(turtle)
+                    end
                 end
+            end
+            
+            -- Check if turtle that completed update now has version data to verify
+            if turtle.update_complete and turtle.data and turtle.data.version then
+                verify_turtle_version_after_update(turtle)
             end
 
             if #turtle.tasks > 0 then
@@ -1169,35 +1245,8 @@ function command_turtles()
                         end
                     end
                     
-                    -- After update completes, turtle will initialize and check version
-                    -- If version is correct, check_turtle_versions will not set it to updating again
-                    -- So we need to check if turtle has correct version and transition out of updating state
-                    if turtle.data and turtle.data.version then
-                        local hub_version = get_hub_version()
-                        if hub_version then
-                            local comparison = compare_versions(turtle.data.version, hub_version)
-                            -- If turtle version matches or is newer, update is complete
-                            if comparison and comparison >= 0 then
-                                -- Update complete, return to waiting spot
-                                print('Turtle ' .. turtle.id .. ' update verified. Returning to waiting spot...')
-                                turtle.update_sent_home = nil
-                                turtle.update_sent_to_disk = nil
-                                turtle.update_waiting_at_disk = nil
-                                -- Return to waiting spot or idle based on state.on
-                                if state.on then
-                                    add_task(turtle, {
-                                        action = 'go_to_waiting_room',
-                                        end_state = 'idle',
-                                    })
-                                else
-                                    add_task(turtle, {
-                                        action = 'go_to_home',
-                                        end_state = 'park',
-                                    })
-                                end
-                            end
-                        end
-                    end
+                    -- Version verification happens after update completes and turtle initializes
+                    -- See verify_turtle_version_after_update() which is called when turtle reports version
                     
                 elseif turtle.state == 'following' then
                     -- CHUNKY TURTLE FOLLOWING MINING TURTLE
