@@ -26,7 +26,19 @@ function main()
     file.close()
     
     -- LOAD MINE INTO MEMORY
-    load_mine()
+    local success, err = pcall(load_mine)
+    if not success then
+        print("ERROR: Failed to load mine: " .. tostring(err))
+        error("Failed to load mine: " .. tostring(err))
+    end
+    
+    -- Verify mine was loaded
+    if not state.mine and not state.mined_blocks then
+        print("WARNING: load_mine() completed but state.mine and state.mined_blocks are not set!")
+        -- Force set state.mine to allow monitor to proceed
+        state.mine = true
+        state.mined_blocks = {}
+    end
     
     -- Find the closest unmined block
     gen_next_block()

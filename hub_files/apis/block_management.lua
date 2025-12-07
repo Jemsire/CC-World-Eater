@@ -10,6 +10,12 @@ local state = API.getState()
 function load_mine()
     -- LOAD MINE INTO state.mine FROM /mine/<x,z>/ DIRECTORY
     -- Loads mined blocks
+    
+    -- Ensure config.locations.mine_enter exists
+    if not config or not config.locations or not config.locations.mine_enter then
+        error("load_mine() failed: config.locations.mine_enter is not defined. Check config.lua")
+    end
+    
     state.mine_dir_path = '/mine/' .. config.locations.mine_enter.x .. ',' .. config.locations.mine_enter.z .. '/'
     
     if not fs.exists(state.mine_dir_path) then
@@ -46,7 +52,7 @@ function load_mine()
         end
     end
     
-    -- Set state.mine flag for monitor compatibility
+    -- Set state.mine flag for monitor compatibility (ALWAYS set this, even if no blocks loaded)
     state.mine = true
     
     state.turtles_dir_path = state.mine_dir_path .. 'turtles/'
