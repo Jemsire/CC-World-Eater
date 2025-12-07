@@ -67,6 +67,28 @@ local function check_drive()
     return "/disk"
 end
 
+-- Recursively create directory path
+local function makeDirRecursive(dir_path)
+    -- Remove trailing slash if present
+    dir_path = string.gsub(dir_path, "/$", "")
+    if dir_path == "" or fs.exists(dir_path) then
+        return true
+    end
+    
+    -- Get parent directory
+    local parent_dir = string.match(dir_path, "^(.-)[^/\\]+$")
+    if parent_dir and parent_dir ~= "" then
+        -- Recursively create parent directories
+        if not makeDirRecursive(parent_dir) then
+            return false
+        end
+    end
+    
+    -- Create this directory
+    fs.makeDir(dir_path)
+    return fs.exists(dir_path)
+end
+
 -- Download file from GitHub
 local function download_file(url, filepath)
     print("  Downloading: " .. filepath)
@@ -96,10 +118,10 @@ local function download_file(url, filepath)
         end
         response.close()
         
-        -- Create directory if needed
+        -- Create directory if needed (recursively)
         local dir = string.match(filepath, "^(.-)[^/\\]*$")
         if dir and dir ~= "" then
-            fs.makeDir(dir)
+            makeDirRecursive(dir)
         end
         
         -- Write file (overwrites existing)
@@ -406,16 +428,23 @@ local function install_files(system_type, drive_path)
             local url = base_url .. "/" .. filepath
             local dest_path = file_set.drive .. "/" .. filepath
             
+            -- Debug: Show apis files being downloaded
+            if string.match(filepath, "/apis/") then
+                print("  [APIS] Downloading: " .. filepath .. " -> " .. dest_path)
+            end
+            
             -- Ensure parent directories exist (for nested folders like apis)
             local parent_dir = string.match(dest_path, "^(.-)[^/\\]*$")
-            if parent_dir and parent_dir ~= "" and not fs.exists(parent_dir) then
-                fs.makeDir(parent_dir)
+            if parent_dir and parent_dir ~= "" then
+                makeDirRecursive(parent_dir)
             end
             
             local success, err = download_file(url, dest_path)
             if not success then
                 print("  ERROR: Failed to download " .. filepath .. ": " .. (err or "unknown"))
                 -- Continue with other files
+            elseif string.match(filepath, "/apis/") then
+                print("  [APIS] ✓ Successfully downloaded: " .. filepath)
             end
         end
     end
@@ -428,9 +457,7 @@ local function install_files(system_type, drive_path)
     if system_type == "hub" then
         -- Copy to hub_files/apis/utilities.lua
         local hub_apis_dir = drive_path .. "/hub_files/apis"
-        if not fs.exists(hub_apis_dir) then
-            fs.makeDir(hub_apis_dir)
-        end
+        makeDirRecursive(hub_apis_dir)
         local hub_basics_dest = hub_apis_dir .. "/utilities.lua"
         local success, err = download_file(shared_utilities_url, hub_basics_dest)
         if not success then
@@ -441,9 +468,7 @@ local function install_files(system_type, drive_path)
         
         -- Copy to turtle_files/apis/utilities.lua
         local turtle_apis_dir = drive_path .. "/turtle_files/apis"
-        if not fs.exists(turtle_apis_dir) then
-            fs.makeDir(turtle_apis_dir)
-        end
+        makeDirRecursive(turtle_apis_dir)
         local turtle_basics_dest = turtle_apis_dir .. "/utilities.lua"
         success, err = download_file(shared_utilities_url, turtle_basics_dest)
         if not success then
@@ -454,9 +479,7 @@ local function install_files(system_type, drive_path)
     elseif system_type == "turtle" or system_type == "chunky" then
         -- Copy to turtle_files/apis/utilities.lua
         local turtle_apis_dir = drive_path .. "/turtle_files/apis"
-        if not fs.exists(turtle_apis_dir) then
-            fs.makeDir(turtle_apis_dir)
-        end
+        makeDirRecursive(turtle_apis_dir)
         local turtle_basics_dest = turtle_apis_dir .. "/utilities.lua"
         local success, err = download_file(shared_utilities_url, turtle_basics_dest)
         if not success then
