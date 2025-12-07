@@ -72,10 +72,20 @@ if startup_file then
 -- Auto-generated startup file for World Eater Turtle
 -- This file runs the turtle's main startup script
 
+print("Turtle startup script running...")
 if fs.exists('/startup.lua') then
-    shell.run('/startup.lua')
+    local success, err = pcall(function()
+        shell.run('/startup.lua')
+    end)
+    if not success then
+        print("ERROR in startup.lua: " .. tostring(err))
+        print("Press any key to continue...")
+        os.pullEvent("key")
+    end
 else
     print('startup.lua not found - run turtle.lua to initialize')
+    print("Press any key to continue...")
+    os.pullEvent("key")
 end
 ]])
     startup_file.close()
