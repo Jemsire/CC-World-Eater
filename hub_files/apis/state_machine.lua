@@ -96,7 +96,7 @@ function command_turtles()
                     free_turtle(turtle)
                     if turtle.data.location.y < config.locations.mine_enter.y then
                         send_turtle_up(turtle)
-                    elseif not basics.in_area(turtle.data.location, config.locations.control_room_area) then
+                    elseif not utilities.in_area(turtle.data.location, config.locations.control_room_area) then
                         halt(turtle)
                     elseif turtle.data.item_count > 0 or (turtle.data.fuel_level ~= "unlimited" and turtle.data.fuel_level < config.fuel_per_unit) then
                         add_task(turtle, {action = 'prepare', data = {config.fuel_per_unit}})
@@ -146,7 +146,7 @@ function command_turtles()
                             })
                         elseif not turtle.pair or turtle.data.turtle_type == 'mining' then
                             -- Mining turtle or solo turtle - continue to block
-                            if not basics.in_area(turtle.data.location, config.locations.waiting_room_area) then
+                            if not utilities.in_area(turtle.data.location, config.locations.waiting_room_area) then
                                 add_task(turtle, {action = 'go_to_mine_enter'})
                             end
                             add_task(turtle, {
@@ -212,10 +212,10 @@ function command_turtles()
                     local is_near_home = false
                     
                     if turtle.data and turtle.data.location then
-                        is_home = (config.locations.home_area and basics.in_area(turtle.data.location, config.locations.home_area)) or
-                                  basics.in_area(turtle.data.location, config.locations.greater_home_area)
-                        is_at_disk = basics.in_location(turtle.data.location, config.locations.disk_drive)
-                        is_near_home = is_home or basics.in_area(turtle.data.location, config.locations.greater_home_area)
+                        is_home = (config.locations.home_area and utilities.in_area(turtle.data.location, config.locations.home_area)) or
+                                  utilities.in_area(turtle.data.location, config.locations.greater_home_area)
+                        is_at_disk = utilities.in_location(turtle.data.location, config.locations.disk_drive)
+                        is_near_home = is_home or utilities.in_area(turtle.data.location, config.locations.greater_home_area)
                     end
                     
                     if is_at_disk then

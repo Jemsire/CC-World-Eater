@@ -5,18 +5,18 @@
 
 function go_to_home()
     state.updated_not_home = nil
-    if basics.in_area(state.location, config.locations.home_area) then
+    if utilities.in_area(state.location, config.locations.home_area) then
         return true
-    elseif basics.in_area(state.location, config.locations.greater_home_area) then
+    elseif utilities.in_area(state.location, config.locations.greater_home_area) then
         if not go_to_home_exit() then return false end
-    elseif basics.in_area(state.location, config.locations.waiting_room_area) then
+    elseif utilities.in_area(state.location, config.locations.waiting_room_area) then
         if not go_to(config.locations.mine_exit, nil, config.paths.waiting_room_to_mine_exit, true) then return false end
     elseif state.location.y < config.locations.mine_enter.y then
         return false
     end
-    if config.locations.main_loop_route[basics.str_xyz(state.location)] then
+    if config.locations.main_loop_route[utilities.str_xyz(state.location)] then
         if not go_route(config.locations.main_loop_route, config.locations.home_enter) then return false end
-    elseif basics.in_area(state.location, config.locations.control_room_area) then
+    elseif utilities.in_area(state.location, config.locations.control_room_area) then
         if not go_to(config.locations.home_enter, nil, config.paths.control_room_to_home_enter, true) then return false end
     else
         return false
@@ -32,9 +32,9 @@ function go_to_home()
 end
 
 function go_to_home_exit()
-    if basics.in_area(state.location, config.locations.greater_home_area) then
+    if utilities.in_area(state.location, config.locations.greater_home_area) then
         if not go_to(config.locations.home_exit, nil, config.paths.home_to_home_exit) then return false end
-    elseif config.locations.main_loop_route[basics.str_xyz(state.location)] then
+    elseif config.locations.main_loop_route[utilities.str_xyz(state.location)] then
         if not go_route(config.locations.main_loop_route, config.locations.home_exit) then return false end
     else
         return false
@@ -43,7 +43,7 @@ function go_to_home_exit()
 end
 
 function go_to_item_drop()
-    if not config.locations.main_loop_route[basics.str_xyz(state.location)] then
+    if not config.locations.main_loop_route[utilities.str_xyz(state.location)] then
         if not go_to_home() then return false end
         if not go_to_home_exit() then return false end
     end
@@ -52,7 +52,7 @@ function go_to_item_drop()
 end
 
 function go_to_refuel()
-    if not config.locations.main_loop_route[basics.str_xyz(state.location)] then
+    if not config.locations.main_loop_route[utilities.str_xyz(state.location)] then
         if not go_to_home() then return false end
         if not go_to_home_exit() then return false end
     end
@@ -61,7 +61,7 @@ function go_to_refuel()
 end
 
 function go_to_disk()
-    if not config.locations.main_loop_route[basics.str_xyz(state.location)] then
+    if not config.locations.main_loop_route[utilities.str_xyz(state.location)] then
         if not go_to_home() then return false end
         if not go_to_home_exit() then return false end
     end
@@ -70,7 +70,7 @@ function go_to_disk()
 end
 
 function go_to_waiting_room()
-    if not basics.in_area(state.location, config.locations.waiting_room_line_area) then
+    if not utilities.in_area(state.location, config.locations.waiting_room_line_area) then
         if not go_to_home() then return false end
     end
     if not go_to(config.locations.waiting_room, nil, config.paths.home_to_waiting_room) then return false end
@@ -80,18 +80,18 @@ end
 function go_to_mine_enter()
     -- Navigate to mine_enter from current location
     -- First check if we're already at mine_enter
-    if basics.in_location({x = state.location.x, y = state.location.y, z = state.location.z}, config.locations.mine_enter) then
+    if utilities.in_location({x = state.location.x, y = state.location.y, z = state.location.z}, config.locations.mine_enter) then
         return true
     end
     
     -- If in waiting room area, use the route
-    if basics.in_area(state.location, config.locations.waiting_room_area) then
+    if utilities.in_area(state.location, config.locations.waiting_room_area) then
         if not go_route(config.locations.waiting_room_to_mine_enter_route) then return false end
         return true
     end
     
     -- Otherwise, navigate to waiting room first, then to mine_enter
-    if not basics.in_area(state.location, config.locations.waiting_room_line_area) then
+    if not utilities.in_area(state.location, config.locations.waiting_room_line_area) then
         if not go_to_home() then return false end
     end
     if not go_to_waiting_room() then return false end
@@ -145,7 +145,7 @@ function go_to_block(block)
     end
     
     -- If not at mine_enter, navigate there first
-    if not basics.in_location({x = state.location.x, y = state.location.y, z = state.location.z}, config.locations.mine_enter) then
+    if not utilities.in_location({x = state.location.x, y = state.location.y, z = state.location.z}, config.locations.mine_enter) then
         if not go_to_mine_enter() then return false end
     end
     
@@ -182,7 +182,7 @@ function go_to_block_offset(block, z_offset)
     end
     
     -- If not at mine_enter, navigate there first
-    if not basics.in_location({x = state.location.x, y = state.location.y, z = state.location.z}, config.locations.mine_enter) then
+    if not utilities.in_location({x = state.location.x, y = state.location.y, z = state.location.z}, config.locations.mine_enter) then
         if not go_to_mine_enter() then return false end
     end
     

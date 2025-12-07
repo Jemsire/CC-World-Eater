@@ -50,7 +50,7 @@ function calibrate()
     
     back()
     
-    if basics.in_area(state.location, config.locations.home_area) then
+    if utilities.in_area(state.location, config.locations.home_area) then
         face(left_shift[left_shift[config.locations.homes.increment]])
     end
     

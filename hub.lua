@@ -27,8 +27,22 @@ for _, filename in pairs(fs.list('/')) do
         end
     end
 end
+-- Copy all files from hub_files
 for _, filename in pairs(fs.list('/disk/hub_files')) do
-    fs.copy('/disk/hub_files/' .. filename, '/' .. filename)
+    if filename ~= 'apis' then
+        fs.copy('/disk/hub_files/' .. filename, '/' .. filename)
+    end
+end
+
+-- Copy apis folder
+if fs.exists('/disk/hub_files/apis') then
+    if fs.exists('/apis') then
+        fs.delete('/apis')
+    end
+    fs.makeDir('/apis')
+    for _, filename in pairs(fs.list('/disk/hub_files/apis')) do
+        fs.copy('/disk/hub_files/apis/' .. filename, '/apis/' .. filename)
+    end
 end
 
 -- Create update wrapper script in root so "update" command works

@@ -3,24 +3,10 @@ os.setComputerLabel('Hub')
 
 -- INITIALIZE APIS
 -- Use require() instead of deprecated os.loadAPI()
-if fs.exists('/apis') then
-    fs.delete('/apis')
-end
-fs.makeDir('/apis')
-fs.copy('/config.lua', '/apis/config')
-fs.copy('/state.lua', '/apis/state')
-fs.copy('/utilities.lua', '/apis/basics')
+-- APIs are already in /apis/ folder (copied by hub.lua)
 require('/apis/config')
 require('/apis/state')
-require('/apis/basics')
-
--- Copy and load mine manager modules
-fs.copy('/block_management.lua', '/apis/block_management')
-fs.copy('/turtle_assignment.lua', '/apis/turtle_assignment')
-fs.copy('/version_management.lua', '/apis/version_management')
-fs.copy('/task_management.lua', '/apis/task_management')
-fs.copy('/user_commands.lua', '/apis/user_commands')
-fs.copy('/state_machine.lua', '/apis/state_machine')
+utilities = require('/apis/utilities')
 require('/apis/block_management')
 require('/apis/turtle_assignment')
 require('/apis/version_management')

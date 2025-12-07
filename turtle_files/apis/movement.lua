@@ -3,8 +3,8 @@
 -- Basic movement and direction functions
 -- ============================================
 
-inf = basics.inf
-str_xyz = basics.str_xyz
+inf = utilities.inf
+str_xyz = utilities.str_xyz
 
 bumps = {
     north = { 0,  0, -1},
@@ -281,10 +281,10 @@ function go_route(route, xyzo)
     if xyzo then
         xyz_string = str_xyz(xyzo)
     end
-    local location_str = basics.str_xyz(state.location)
+    local location_str = utilities.str_xyz(state.location)
     while route[location_str] and location_str ~= xyz_string do
         if not go_to(route[location_str], nil, 'xyz') then return false end
-        location_str = basics.str_xyz(state.location)
+        location_str = utilities.str_xyz(state.location)
     end
     if xyzo then
         if location_str ~= xyz_string then

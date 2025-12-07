@@ -180,7 +180,7 @@ function count_turtles_at_disk()
     local count = 0
             for _, turtle in pairs(state.turtles) do
         if turtle.data and turtle.data.location and turtle.state == 'updating' then
-            if basics.in_location(turtle.data.location, config.locations.disk_drive) then
+            if utilities.in_location(turtle.data.location, config.locations.disk_drive) then
                 count = count + 1
                 end
             end

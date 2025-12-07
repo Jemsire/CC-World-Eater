@@ -63,7 +63,7 @@ function get_closest_unmined_block()
                                 
                                 if not assigned then
                                     -- Calculate distance from mine_enter
-                                    local distance = basics.distance(
+                                    local distance = utilities.distance(
                                         {x = x, y = config.locations.mine_enter.y, z = z},
                                         config.locations.mine_enter
                                     )
@@ -95,7 +95,7 @@ function gen_next_block()
     if state.next_block then
         -- Calculate fuel needed: distance to block + depth to bedrock * 2 (down and back) + padding
         local surface_y = config.locations.mining_center.y + 2  -- Surface level
-        local distance_to_block = basics.distance(
+        local distance_to_block = utilities.distance(
             {x = state.next_block.x, y = surface_y, z = state.next_block.z},
             config.locations.mine_enter
         )
@@ -112,7 +112,7 @@ function good_on_fuel(mining_turtle, chunky_turtle)
     local current_depth = mining_turtle.data.location.y
     local surface_y = config.locations.mining_center.y + 2
     local depth_to_surface = surface_y - current_depth
-    local distance_to_exit = basics.distance(mining_turtle.data.location, config.locations.mine_exit)
+    local distance_to_exit = utilities.distance(mining_turtle.data.location, config.locations.mine_exit)
     local fuel_needed = math.ceil((depth_to_surface + distance_to_exit) * 1.5)
     
     return (mining_turtle.data.fuel_level == "unlimited" or mining_turtle.data.fuel_level > fuel_needed) and ((not config.use_chunky_turtles) or (chunky_turtle.data.fuel_level == "unlimited" or chunky_turtle.data.fuel_level > fuel_needed))

@@ -264,8 +264,8 @@ local function download_file_list()
                path ~= "README.md" and
                path ~= ".gitignore" and
                path ~= "install.lua" and
-               path ~= "hub_files/utilities.lua" and  -- Skip, will copy from shared_files
-               path ~= "turtle_files/utilities.lua" then  -- Skip, will copy from shared_files
+               path ~= "hub_files/utilities.lua" and  -- Skip, will copy from shared_files to apis
+               path ~= "turtle_files/utilities.lua" then  -- Skip, will copy from shared_files to apis
                 
                 local folder, filename = string.match(path, "^(.-)/([^/]+)$")
                 if folder and filename then
@@ -389,35 +389,45 @@ local function install_files(system_type, drive_path)
     print("  Copying shared files...")
     local shared_utilities_url = base_url .. "/shared_files/utilities.lua"
     
-    -- Copy utilities.lua to hub_files if hub files were installed
+    -- Copy utilities.lua to apis folders as utilities.lua
     if system_type == "hub" then
-        local hub_utilities_dest = drive_path .. "/hub_files/utilities.lua"
-        local success, err = download_file(shared_utilities_url, hub_utilities_dest)
+        -- Copy to hub_files/apis/utilities.lua
+        local hub_apis_dir = drive_path .. "/hub_files/apis"
+        if not fs.exists(hub_apis_dir) then
+            fs.makeDir(hub_apis_dir)
+        end
+        local hub_basics_dest = hub_apis_dir .. "/utilities.lua"
+        local success, err = download_file(shared_utilities_url, hub_basics_dest)
         if not success then
-            print("  WARNING: Failed to copy shared utilities.lua to hub_files: " .. (err or "unknown"))
-            print("  Note: utilities.lua should exist in hub_files/ directory")
+            print("  WARNING: Failed to copy shared utilities.lua to hub_files/apis/utilities.lua: " .. (err or "unknown"))
         else
-            print("  ✓ Copied utilities.lua to hub_files")
+            print("  ✓ Copied utilities.lua to hub_files/apis/utilities.lua")
         end
         
-        -- Copy utilities.lua to turtle_files if turtle files were installed
-        local turtle_utilities_dest = drive_path .. "/turtle_files/utilities.lua"
-        success, err = download_file(shared_utilities_url, turtle_utilities_dest)
+        -- Copy to turtle_files/apis/utilities.lua
+        local turtle_apis_dir = drive_path .. "/turtle_files/apis"
+        if not fs.exists(turtle_apis_dir) then
+            fs.makeDir(turtle_apis_dir)
+        end
+        local turtle_basics_dest = turtle_apis_dir .. "/utilities.lua"
+        success, err = download_file(shared_utilities_url, turtle_basics_dest)
         if not success then
-            print("  WARNING: Failed to copy shared utilities.lua to turtle_files: " .. (err or "unknown"))
-            print("  Note: utilities.lua should exist in turtle_files/ directory")
+            print("  WARNING: Failed to copy shared utilities.lua to turtle_files/apis/utilities.lua: " .. (err or "unknown"))
         else
-            print("  ✓ Copied utilities.lua to turtle_files")
+            print("  ✓ Copied utilities.lua to turtle_files/apis/utilities.lua")
         end
     elseif system_type == "turtle" or system_type == "chunky" then
-        -- Copy utilities.lua to turtle_files
-        local turtle_utilities_dest = drive_path .. "/turtle_files/utilities.lua"
-        local success, err = download_file(shared_utilities_url, turtle_utilities_dest)
+        -- Copy to turtle_files/apis/utilities.lua
+        local turtle_apis_dir = drive_path .. "/turtle_files/apis"
+        if not fs.exists(turtle_apis_dir) then
+            fs.makeDir(turtle_apis_dir)
+        end
+        local turtle_basics_dest = turtle_apis_dir .. "/utilities.lua"
+        local success, err = download_file(shared_utilities_url, turtle_basics_dest)
         if not success then
-            print("  WARNING: Failed to copy shared utilities.lua to turtle_files: " .. (err or "unknown"))
-            print("  Note: utilities.lua should exist in turtle_files/ directory")
+            print("  WARNING: Failed to copy shared utilities.lua to turtle_files/apis/utilities.lua: " .. (err or "unknown"))
         else
-            print("  ✓ Copied utilities.lua to turtle_files")
+            print("  ✓ Copied utilities.lua to turtle_files/apis/utilities.lua")
         end
     end
     

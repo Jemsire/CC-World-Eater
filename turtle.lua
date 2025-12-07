@@ -17,8 +17,22 @@ for _, filename in pairs(fs.list('/')) do
     end
 end
 
+-- Copy all files from turtle_files
 for _, filename in pairs(fs.list(turtle_files_path)) do
-    fs.copy(turtle_files_path .. '/' .. filename, '/' .. filename)
+    if filename ~= 'apis' then
+        fs.copy(turtle_files_path .. '/' .. filename, '/' .. filename)
+    end
+end
+
+-- Copy apis folder
+if fs.exists(turtle_files_path .. '/apis') then
+    if fs.exists('/apis') then
+        fs.delete('/apis')
+    end
+    fs.makeDir('/apis')
+    for _, filename in pairs(fs.list(turtle_files_path .. '/apis')) do
+        fs.copy(turtle_files_path .. '/apis/' .. filename, '/apis/' .. filename)
+    end
 end
 
 if not tonumber(hub_id) then

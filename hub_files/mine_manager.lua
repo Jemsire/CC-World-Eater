@@ -3,8 +3,8 @@
 -- Loads modules and coordinates mining operations
 -- ============================================
 
-inf = basics.inf
-str_xyz = basics.str_xyz
+inf = utilities.inf
+str_xyz = utilities.str_xyz
 
 -- Load modules using require() (CC:Tweaked built-in)
 require('/apis/block_management')

@@ -168,10 +168,10 @@ local function get_hub_files()
         if item.type == "blob" and item.path then
             local path = item.path
             -- Include hub_files/* and hub.lua, exclude config unless force_config
-            -- Skip utilities.lua - will copy from shared_files instead
+            -- Skip utilities.lua - will copy from shared_files to apis instead
             if string.match(path, "^hub_files/") then
                 -- Skip config file unless force_config is enabled
-                -- Skip utilities.lua - will copy from shared_files
+                -- Skip utilities.lua - will copy from shared_files to apis
                 if (not config_files[path] or force_config) and path ~= "hub_files/utilities.lua" then
                     table.insert(hub_files, path)
                 end
@@ -445,33 +445,33 @@ if #shared_files > 0 then
                 file.write(content)
                 file.close()
                 
-                -- Copy utilities.lua to both hub_files and turtle_files
+                -- Copy utilities.lua to apis folders as utilities.lua
                 if filepath == "shared_files/utilities.lua" then
-                    -- Copy to hub_files
-                    local hub_dest = drive_path .. "/hub_files/utilities.lua"
-                    local hub_dir = string.match(hub_dest, "^(.-)[^/\\]*$")
-                    if hub_dir and hub_dir ~= "" then
-                        fs.makeDir(hub_dir)
+                    -- Copy to hub_files/apis/utilities.lua
+                    local hub_apis_dir = drive_path .. "/hub_files/apis"
+                    if not fs.exists(hub_apis_dir) then
+                        fs.makeDir(hub_apis_dir)
                     end
+                    local hub_dest = hub_apis_dir .. "/utilities.lua"
                     -- Delete existing file if it exists
                     if fs.exists(hub_dest) then
                         fs.delete(hub_dest)
                     end
                     fs.copy(temp_path, hub_dest)
-                    print("    ✓ Copied to hub_files/utilities.lua")
+                    print("    ✓ Copied to hub_files/apis/utilities.lua")
                     
-                    -- Copy to turtle_files
-                    local turtle_dest = drive_path .. "/turtle_files/utilities.lua"
-                    local turtle_dir = string.match(turtle_dest, "^(.-)[^/\\]*$")
-                    if turtle_dir and turtle_dir ~= "" then
-                        fs.makeDir(turtle_dir)
+                    -- Copy to turtle_files/apis/utilities.lua
+                    local turtle_apis_dir = drive_path .. "/turtle_files/apis"
+                    if not fs.exists(turtle_apis_dir) then
+                        fs.makeDir(turtle_apis_dir)
                     end
+                    local turtle_dest = turtle_apis_dir .. "/utilities.lua"
                     -- Delete existing file if it exists
                     if fs.exists(turtle_dest) then
                         fs.delete(turtle_dest)
                     end
                     fs.copy(temp_path, turtle_dest)
-                    print("    ✓ Copied to turtle_files/utilities.lua")
+                    print("    ✓ Copied to turtle_files/apis/utilities.lua")
                     
                     updated_count = updated_count + 2  -- Count as 2 updates
                 end
