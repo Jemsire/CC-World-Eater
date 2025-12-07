@@ -306,6 +306,7 @@ local function get_file_list(system_type)
                     end
                 elseif string.match(folder, "^hub_files") then
                     -- Include all files from hub_files and nested folders (like hub_files/apis)
+                    -- This matches: "hub_files", "hub_files/apis", "hub_files/apis/subfolder", etc.
                     for _, file in ipairs(file_list) do
                         table.insert(files, file)
                     end
@@ -347,6 +348,16 @@ local function get_file_list(system_type)
         
         if #files > 0 then
             print("  Using dynamic file list from GitHub")
+            -- Debug: Count files in apis folders
+            local apis_count = 0
+            for _, file in ipairs(files) do
+                if string.match(file, "/apis/") then
+                    apis_count = apis_count + 1
+                end
+            end
+            if apis_count > 0 then
+                print("  Found " .. apis_count .. " file(s) in apis folders")
+            end
             return files
         end
     end
@@ -378,6 +389,16 @@ local function install_files(system_type, drive_path)
         local files = get_file_list(system_type)
         file_sets = {{files = files, drive = drive_path}}
     end
+
+    print("List of files to install: ")
+    for _, file_set in ipairs(file_sets) do
+        for _, filepath in ipairs(file_set.files) do
+            print("  " .. filepath)
+        end
+    end
+
+    print("Press any key to continue...")
+    read()
     
     -- Install all file sets
     for _, file_set in ipairs(file_sets) do
@@ -639,6 +660,9 @@ local function main()
     
     -- Download and install
     install_files(system_type, drive_path)
+    print("Press any key to continue...")
+    read()
+    
     
     -- Validate
     if not validate_installation(system_type, drive_path) then

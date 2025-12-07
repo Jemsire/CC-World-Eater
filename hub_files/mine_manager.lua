@@ -6,13 +6,13 @@
 inf = utilities.inf
 str_xyz = utilities.str_xyz
 
--- Load modules using require() (CC:Tweaked built-in)
-require('/apis/block_management')
-require('/apis/turtle_assignment')
-require('/apis/version_management')
-require('/apis/task_management')
-require('/apis/user_commands')
-require('/apis/state_machine')
+-- Load modules using loadfile()
+loadfile('/apis/block_management')()
+loadfile('/apis/turtle_assignment')()
+loadfile('/apis/version_management')()
+loadfile('/apis/task_management')()
+loadfile('/apis/user_commands')()
+loadfile('/apis/state_machine')()
 
 function main()
     -- INCREASE SESSION ID BY ONE

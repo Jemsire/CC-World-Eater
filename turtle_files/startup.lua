@@ -2,18 +2,24 @@
 os.setComputerLabel('Turtle ' .. os.getComputerID())
 
 -- INITIALIZE APIS
--- Use require() instead of deprecated os.loadAPI()
+-- Use loadfile() to load APIs
 -- APIs are already in /apis/ folder (copied by turtle.lua)
-require('/apis/config')
-require('/apis/state')
-utilities = require('/apis/utilities')
-require('/apis/movement')
-require('/apis/navigation')
-require('/apis/detection')
-require('/apis/item_management')
-require('/apis/mining')
-require('/apis/turtle_utilities')
-require('/apis/actions')
+loadfile('/apis/config')()
+-- Create config table to reference globals from config.lua (for compatibility with code that uses config.*)
+-- Note: Most config is loaded from hub during initialization, this is just for turtle-specific defaults
+config = {
+    bedrock_level = bedrock_level
+    -- Other config properties (locations, use_chunky_turtles, etc.) will be set by hub during initialization
+}
+loadfile('/apis/state')()
+utilities = loadfile('/apis/utilities')()
+loadfile('/apis/movement')()
+loadfile('/apis/navigation')()
+loadfile('/apis/detection')()
+loadfile('/apis/item_management')()
+loadfile('/apis/mining')()
+loadfile('/apis/turtle_utilities')()
+loadfile('/apis/actions')()
 
 
 -- OPEN REDNET

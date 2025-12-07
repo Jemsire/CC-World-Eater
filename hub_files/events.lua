@@ -1,5 +1,5 @@
 -- Load modules needed by events.lua
-require('/apis/version_management')
+loadfile('/apis/version_management')()
 
 while true do
     event = {os.pullEvent()}
