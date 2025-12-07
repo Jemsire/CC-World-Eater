@@ -723,6 +723,12 @@ function process_update_queue()
         return
     end
     
+    -- Wait for turtle to have data before processing
+    if not turtle.data then
+        -- Turtle hasn't reported yet, wait for next cycle
+        return
+    end
+    
     -- Check turtle location
     local is_home = false
     local is_at_disk = false
@@ -766,12 +772,14 @@ function process_update_queue()
         -- Send turtle home first
         if not turtle.update_sent_home then
             print('Sending turtle ' .. turtle_id .. ' home for update...')
+            state.update_in_progress = true
             halt(turtle)
             send_turtle_up(turtle)
             add_task(turtle, {
                 action = 'go_to_home',
                 end_function = function()
                     turtle.update_sent_home = true
+                    state.update_in_progress = false
                     process_update_queue()
                 end
             })

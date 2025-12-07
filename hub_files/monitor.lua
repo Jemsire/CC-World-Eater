@@ -178,6 +178,7 @@ function turtle_viewer(turtle_ids)
         
         -- Display turtle version below turtle ID
         term.setCursorPos(elements.turtle_id.x, elements.turtle_id.y + 5)
+        term.setBackgroundColor(colors.black)
         term.setTextColor(colors.white)
         term.write('Version: ')
         if turtle.data.version then
@@ -198,7 +199,7 @@ function turtle_viewer(turtle_ids)
                 if is_out_of_date then
                     term.setTextColor(colors.red)
                 else
-                    term.setTextColor(colors.green)
+                    term.setTextColor(colors.yellow)
                 end
                 term.write('v' .. turtle_version_str)
             else
@@ -347,12 +348,6 @@ function turtle_viewer(turtle_ids)
         term.write('Fuel: ')
         term.setTextColor(colors.green)
         term.write(turtle.data.fuel_level)
-        
-        term.setCursorPos(elements.turtle_data.x, elements.turtle_data.y + 7)
-        term.setTextColor(colors.white)
-        term.write('Dist: ')
-        term.setTextColor(colors.green)
-        term.write(turtle.data.distance)
         
         term.setTextColor(colors.white)
         
