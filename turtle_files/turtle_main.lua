@@ -9,6 +9,7 @@ function parse_requests()
     while #state.requests > 0 do
         local request = table.remove(state.requests, 1)
         sender, message, protocol = request[1], request[2], request[3]
+        print('=== TURTLE_MAIN: Processing request - action=' .. tostring(message.action) .. ' ===')
         if message.action == 'shutdown' then
             os.shutdown()
         elseif message.action == 'reboot' then
@@ -17,7 +18,15 @@ function parse_requests()
             os.run({}, '/update')
         elseif message.request_id == -1 or message.request_id == state.request_id then -- MAKE SURE REQUEST IS CURRENT
             if state.initialized or message.action == 'initialize' then
-                print('Directive: ' .. message.action)
+                print('=== TURTLE_MAIN: Directive: ' .. message.action .. ' ===')
+                if message.action == 'initialize' then
+                    print('=== TURTLE_MAIN: Processing initialize command ===')
+                    print('=== TURTLE_MAIN: message.data=' .. tostring(message.data) .. ' ===')
+                    if message.data and type(message.data) == 'table' then
+                        print('=== TURTLE_MAIN: message.data[1] (session_id)=' .. tostring(message.data[1]) .. ' ===')
+                        print('=== TURTLE_MAIN: message.data[2] (config)=' .. tostring(message.data[2]) .. ' ===')
+                    end
+                end
                 state.busy = true
                 -- Check if action exists
                 if not actions[message.action] then
@@ -31,8 +40,11 @@ function parse_requests()
                     end)
                     if success then
                         state.success = result
+                        if message.action == 'initialize' then
+                            print('=== TURTLE_MAIN: initialize() returned: ' .. tostring(result) .. ' ===')
+                        end
                     else
-                        print('ERROR executing action "' .. tostring(message.action) .. '": ' .. tostring(result))
+                        print('=== TURTLE_MAIN: ERROR executing action "' .. tostring(message.action) .. '": ' .. tostring(result) .. ' ===')
                         state.success = false
                     end
                 end

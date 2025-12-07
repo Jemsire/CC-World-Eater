@@ -6,6 +6,11 @@
 -- Load all APIs through init_apis.lua (handles all API loading)
 loadfile('/init_apis.lua')()
 
+-- Verify command_turtles is loaded
+if not command_turtles then
+    error("command_turtles function not loaded! Check that state_machine.lua is loading correctly.")
+end
+
 -- Get references from API class
 local state = API.getState()
 local utilities = API.getUtilities()
@@ -33,34 +38,57 @@ function main()
     end
     
     -- Verify mine was loaded
-    if not state.mine and not state.mined_blocks then
+    local state_refresh = API.getState()
+    if not state_refresh.mine and not state_refresh.mined_blocks then
         print("WARNING: load_mine() completed but state.mine and state.mined_blocks are not set!")
         -- Force set state.mine to allow monitor to proceed
-        state.mine = true
-        state.mined_blocks = {}
+        API.setStateValue('mine', true)
+        API.setStateValue('mined_blocks', {})
     end
     
     -- Find the closest unmined block
     gen_next_block()
+    
+    -- REBOOT ALL TURTLES ON HUB RESTART
+    -- When hub restarts, it gets a new session_id, so all turtles need to reboot to re-initialize
+    -- Wait for turtles to report, then reboot all of them
+    print('Hub restarted - will reboot all turtles to re-initialize with new session_id...')
+    API.setStateValue('check_initialized_pending', true)
+    API.setStateValue('check_initialized_wait', 0)
     
     -- DEV: Check if hub version has DEV suffix - if so, force update all turtles
     local hub_version = get_hub_version()
     if hub_version and is_dev_version(hub_version) then
         print('DEV: Hub version has -DEV suffix. Will force update all turtles...')
         -- Wait a bit for turtles to report, then queue them for force update
-        state.dev_force_update_pending = true
-        state.dev_force_update_wait = 0
+        API.setStateValue('dev_force_update_pending', true)
+        API.setStateValue('dev_force_update_wait', 0)
     end
     
     while true do
+        -- Reboot all turtles on hub restart (hub restart scenario)
+        local state_refresh = API.getState()
+        if state_refresh.check_initialized_pending then
+            local wait_count = (state_refresh.check_initialized_wait or 0) + 1
+            API.setStateValue('check_initialized_wait', wait_count)
+            -- Wait 3 seconds (30 cycles at 0.1s each) for turtles to report
+            if wait_count >= 30 then
+                reboot_all_turtles()
+                API.setStateValue('check_initialized_pending', false)
+                API.setStateValue('check_initialized_wait', nil)
+            end
+        end
+        
         -- DEV: Handle force update after waiting for turtles to report
-        if state.dev_force_update_pending then
-            state.dev_force_update_wait = (state.dev_force_update_wait or 0) + 1
+        state_refresh = API.getState()
+        if state_refresh.dev_force_update_pending then
+            local wait_count = (state_refresh.dev_force_update_wait or 0) + 1
+            API.setStateValue('dev_force_update_wait', wait_count)
             -- Wait 5 seconds (50 cycles at 0.1s each) for turtles to report
-            if state.dev_force_update_wait >= 50 then
+            if wait_count >= 50 then
                 print('DEV: Force updating all turtles...')
                 local turtle_list = {}
-                for _, turtle in pairs(state.turtles) do
+                for _, turtle in pairs(state_refresh.turtles) do
                     if turtle.data then
                         table.insert(turtle_list, turtle)
                     end
@@ -69,10 +97,10 @@ function main()
                     queue_turtles_for_update(turtle_list, false, true)  -- force_update = true
                 else
                     print('DEV: No turtles found. Will check again in 5 seconds...')
-                    state.dev_force_update_wait = 0  -- Reset counter to check again
+                    API.setStateValue('dev_force_update_wait', 0)  -- Reset counter to check again
                 end
-                state.dev_force_update_pending = false
-                state.dev_force_update_wait = nil
+                API.setStateValue('dev_force_update_pending', false)
+                API.setStateValue('dev_force_update_wait', nil)
             end
         end
         

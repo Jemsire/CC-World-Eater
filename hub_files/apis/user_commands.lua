@@ -50,7 +50,7 @@ function user_input(input)
                 for _, turtle in pairs(turtles) do
                     turtle.tasks = {}
                     add_task(turtle, {action = 'pass'})
-                    rednet.send(turtle.id, {
+                    DataThread.send(turtle.id, {
                         action = 'shutdown',
                     }, 'mastermine')
                 end
@@ -65,11 +65,29 @@ function user_input(input)
                 for _, turtle in pairs(turtles) do
                     turtle.tasks = {}
                     add_task(turtle, {action = 'pass'})
-                    rednet.send(turtle.id, {
+                    DataThread.send(turtle.id, {
                         action = 'reboot',
                     }, 'mastermine')
                 end
             else
+                -- Reboot all turtles, then hub
+                print('Rebooting all turtles, then hub...')
+                local rebooted_count = 0
+                for _, turtle in pairs(state.turtles) do
+                    if turtle.data then
+                        -- Free turtle from assignments
+                        free_turtle(turtle)
+                        -- Clear tasks
+                        turtle.tasks = {}
+                        -- Send reboot command
+                        DataThread.send(turtle.id, {
+                            action = 'reboot',
+                        }, 'mastermine')
+                        rebooted_count = rebooted_count + 1
+                    end
+                end
+                print('Reboot command sent to ' .. rebooted_count .. ' turtle(s)')
+                sleep(1)  -- Brief delay to let reboot commands send
                 -- Reboot hub
                 os.reboot()
             end
@@ -124,11 +142,21 @@ function user_input(input)
         elseif command == 'return' then
             -- BRING TURTLE HOME
             for _, turtle in pairs(turtles) do
-                turtle.tasks = {}
-                add_task(turtle, {action = 'pass'})
-                halt(turtle)
-                send_turtle_up(turtle)
-                add_task(turtle, {action = 'go_to_home'})
+                -- Check if turtle is initialized (has session_id and config)
+                if not turtle.data or turtle.data.session_id ~= session_id then
+                    print('Turtle ' .. turtle.id .. ' is not initialized yet. Cannot return home.')
+                else
+                    turtle.tasks = {}
+                    -- Clear any halt state so turtle can move
+                    if fs.exists(state.turtles_dir_path .. turtle.id .. '/halt') then
+                        fs.delete(state.turtles_dir_path .. turtle.id .. '/halt')
+                    end
+                    -- Free turtle from block assignment
+                    free_turtle(turtle)
+                    -- Send turtle up from mine if underground, then go home
+                    send_turtle_up(turtle)
+                    add_task(turtle, {action = 'go_to_home', end_state = 'park'})
+                end
             end
         elseif command == 'halt' then
             -- HALT TURTLE(S)
@@ -151,8 +179,9 @@ function user_input(input)
                     turtle.tasks = {}
                     add_task(turtle, {action = 'pass'})
                 end
-                state.on = true
-                fs.open(state.mine_dir_path .. 'on', 'w').close()
+                API.setStateValue('on', true)
+                local state_refresh = API.getState()
+                fs.open(state_refresh.mine_dir_path .. 'on', 'w').close()
             end
         elseif command == 'off' or command == 'stop' then
             -- STANDBY MINING NETWORK
@@ -162,9 +191,14 @@ function user_input(input)
                     add_task(turtle, {action = 'pass'})
                     free_turtle(turtle)
                 end
-                state.on = nil
-                fs.delete(state.mine_dir_path .. 'on')
+                API.setStateValue('on', nil)
+                local state_refresh = API.getState()
+                fs.delete(state_refresh.mine_dir_path .. 'on')
             end
+        elseif command == 'check_init' or command == 'confirm_init' then
+            -- CHECK INITIALIZATION STATUS AND REBOOT TURTLES WITH OLD SESSION_ID
+            print('Checking turtle initialization status...')
+            check_and_reboot_initialized_turtles()
         elseif command == 'debug' then
             -- DEBUG
         end

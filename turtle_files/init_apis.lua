@@ -146,7 +146,7 @@ function API.init()
         if func then func() end
     end
     
-    if not go_to then
+    if not go_to_home then
         local func = loadfile(get_api_path('navigation.lua'))
         if func then func() end
     end

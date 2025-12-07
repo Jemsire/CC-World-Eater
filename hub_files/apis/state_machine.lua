@@ -4,6 +4,7 @@
 -- ============================================
 
 -- Get API references
+-- These must be available when this module loads (init_apis.lua loads config/state/utilities first)
 local config = API.getConfig()
 local state = API.getState()
 local utilities = API.getUtilities()
@@ -30,8 +31,8 @@ function command_turtles()
             else
                 os.run({}, '/update')
             end
-            state.update_hub_after = false
-            state.force_update = false
+            API.setStateValue('update_hub_after', false)
+            API.setStateValue('force_update', false)
         end
     end
     
@@ -41,15 +42,89 @@ function command_turtles()
         
         if turtle.data then
         
-            if turtle.data.session_id ~= session_id then
-                -- BABY TURTLE NEEDS TO LEARN
-                if (not turtle.tasks) or (not turtle.tasks[1]) or (not (turtle.tasks[1].action == 'initialize')) then
-                    -- Check if this turtle just completed an update and needs version verification
-                    if turtle.update_complete then
-                        -- Turtle just updated and is initializing - verify version after initialization completes
+            -- Check if turtle sent initialization_report (self-initialized)
+            if turtle.data.action == 'initialization_report' then
+                -- Turtle has self-initialized and is reporting readiness
+                print('Turtle ' .. turtle.id .. ' initialized - type: ' .. (turtle.data.turtle_type or 'unknown'))
+                
+                -- Store location from initialization report (in case regular reports don't include it yet)
+                if turtle.data.location then
+                    turtle.init_location = turtle.data.location
+                    turtle.init_orientation = turtle.data.orientation
+                end
+                
+                -- Mark turtle as not ready until handshake is received
+                turtle.ready = false
+                
+                -- Check if turtle has old session_id (hub restarted, turtle didn't)
+                if turtle.data.session_id and turtle.data.session_id ~= session_id then
+                    print('Turtle ' .. turtle.id .. ' has old session_id - forcing reboot')
+                    -- Free turtle from assignments
+                    free_turtle(turtle)
+                    -- Clear tasks
+                    turtle.tasks = {}
+                    -- Send reboot command
+                    DataThread.send(turtle.id, {
+                        action = 'reboot',
+                    }, 'mastermine')
+                    turtle.needs_reboot = true
+                    turtle.data.action = nil  -- Clear action so we don't process it again
+                    -- Skip the rest of initialization for this turtle
+                else
+                    -- Check if turtle needs update BEFORE sending config
+                    check_turtle_version_on_init(turtle)
+                    
+                    -- Send config to complete initialization (unless turtle needs update first)
+                    if turtle.state ~= 'updating' then
+                        if not turtle.data.session_id or turtle.data.session_id ~= session_id or not turtle.ready then
+                            -- Turtle needs config or needs to re-send handshake
+                            initialize_turtle(turtle)
+                            
+                            -- Immediately send the initialize task if it was added
+                            if #turtle.tasks > 0 and turtle.tasks[1].action == 'initialize' then
+                                send_tasks(turtle)
+                            end
+                        end
+                    end
+                    -- Clear the action flag so normal reporting continues
+                    turtle.data.action = nil
+                end
+            elseif turtle.data.session_id ~= session_id then
+                -- Turtle has mismatched session_id - either never initialized or has old session_id
+                if turtle.data.session_id then
+                    -- Turtle has old session_id (hub restarted) - needs to reboot to clear state
+                    if not turtle.needs_reboot then
+                        -- Get current session_id safely
+                        local current_session_id = session_id
+                        if not current_session_id and fs.exists('/session_id') then
+                            local session_file = fs.open('/session_id', 'r')
+                            if session_file then
+                                current_session_id = tonumber(session_file.readAll())
+                                session_file.close()
+                            end
+                        end
+                        local session_str = current_session_id and tostring(current_session_id) or 'unknown'
+                        print('Turtle ' .. turtle.id .. ' has old session_id (' .. turtle.data.session_id .. 
+                              '), current hub session: ' .. session_str .. '. Forcing reboot...')
+                        -- Free turtle from assignments
+                        free_turtle(turtle)
+                        -- Clear tasks
+                        turtle.tasks = {}
+                        -- Send reboot command
+                        DataThread.send(turtle.id, {
+                            action = 'reboot',
+                        }, 'mastermine')
+                        turtle.needs_reboot = true  -- Mark to prevent duplicate reboots
+                    end
+                else
+                    -- Turtle has no session_id (never initialized) - send initialize command
+                    if (not turtle.tasks) or (not turtle.tasks[1]) or (not (turtle.tasks[1].action == 'initialize')) then
                         initialize_turtle(turtle)
-                    else
-                        initialize_turtle(turtle)
+                        
+                        -- Immediately send the initialize task if it was added
+                        if #turtle.tasks > 0 and turtle.tasks[1].action == 'initialize' then
+                            send_tasks(turtle)
+                        end
                     end
                 end
             end
@@ -64,15 +139,113 @@ function command_turtles()
                 turtle.tasks = {}
             end
             
+            -- Ensure ready flag is initialized
+            if turtle.ready == nil then
+                turtle.ready = false
+            end
+            
+            -- Send initialize tasks immediately (even if turtle not ready yet)
+            -- Other tasks only sent if turtle is ready
+            -- Updating turtles can send update-related tasks (go_to_disk, go_to_home, calibrate, update)
             if #turtle.tasks > 0 then
-                -- TURTLE IS BUSY
-                send_tasks(turtle)
+                local has_initialize_task = false
+                local is_update_task = false
+                for _, task in ipairs(turtle.tasks) do
+                    if task.action == 'initialize' then
+                        has_initialize_task = true
+                        break
+                    elseif task.action == 'go_to_disk' or task.action == 'go_to_home' or 
+                           task.action == 'calibrate' or task.action == 'update' then
+                        is_update_task = true
+                        break
+                    end
+                end
+                
+                if has_initialize_task then
+                    -- Send initialize task immediately (turtle needs this to become ready)
+                    send_tasks(turtle)
+                elseif turtle.state == 'updating' and is_update_task then
+                    -- Updating turtle - only send update-related tasks
+                    send_tasks(turtle)
+                elseif turtle.state ~= 'updating' and turtle.ready then
+                    -- TURTLE IS READY - send other tasks (but not if updating)
+                    send_tasks(turtle)
+                end
+            elseif not turtle.ready and turtle.state ~= 'updating' then
+                -- No tasks and not ready - check if we need to send initialize
+                if turtle.data.session_id == session_id and turtle.data.action ~= 'initialization_report' then
+                    -- Turtle has session_id but not ready - might need to re-send initialize to trigger handshake
+                    -- Check if turtle has initialize task queued
+                    local has_initialize = false
+                    if turtle.tasks and #turtle.tasks > 0 then
+                        for _, task in ipairs(turtle.tasks) do
+                            if task.action == 'initialize' then
+                                has_initialize = true
+                                break
+                            end
+                        end
+                    end
+                    
+                    if not has_initialize then
+                        -- Turtle has session_id but isn't ready and has no initialize task - send initialize
+                        initialize_turtle(turtle)
+                        -- Immediately send the initialize task if it was added
+                        if #turtle.tasks > 0 and turtle.tasks[1].action == 'initialize' then
+                            send_tasks(turtle)
+                        end
+                    end
+                end
+            end
 
             elseif not turtle.data.location then
                 -- TURTLE NEEDS A MAP
-                add_task(turtle, {action = 'calibrate'})
+                -- Check if turtle has location from initialization report (self-initialized turtles)
+                if turtle.init_location then
+                    -- Use stored location from initialization report
+                    turtle.data.location = turtle.init_location
+                    turtle.data.orientation = turtle.init_orientation
+                    print('Using stored location from initialization report for turtle ' .. turtle.id)
+                -- But only if turtle is initialized (has session_id matching hub)
+                -- Self-initialized turtles already have location, so this is for legacy turtles
+                elseif turtle.data.session_id == session_id then
+                    -- Check if calibrate task already exists to prevent loops
+                    local has_calibrate_task = false
+                    if turtle.tasks then
+                        for _, task in ipairs(turtle.tasks) do
+                            if task.action == 'calibrate' then
+                                has_calibrate_task = true
+                                break
+                            end
+                        end
+                    end
+                    if not has_calibrate_task then
+                        add_task(turtle, {action = 'calibrate'})
+                    end
+                end
 
             elseif turtle.state ~= 'halt' then
+                -- TURTLE IS READY AND CAN RECEIVE COMMANDS
+                -- Handle initial routing after handshake (turtle just became ready)
+                if turtle.ready and turtle.data.session_id == session_id and turtle.just_became_ready then
+                    -- Turtle just completed handshake - route based on on/off state
+                    -- Only route if turtle is in 'lost' state (initial state after initialization)
+                    -- Don't route if turtle is updating - let it finish updating first
+                    if turtle.state == 'lost' then
+                        print('Turtle ' .. turtle.id .. ' just became ready - routing based on on/off state (on=' .. tostring(state.on) .. ')')
+                        if state.on then
+                            -- System is on - send turtle to idle state (will be assigned mining tasks)
+                            add_task(turtle, {action = 'pass', end_state = 'idle'})
+                        else
+                            -- System is off - send turtle to park
+                            add_task(turtle, {action = 'go_to_home', end_state = 'park'})
+                        end
+                    elseif turtle.state == 'updating' then
+                        -- Turtle is updating - don't route yet, will route after update completes
+                        print('Turtle ' .. turtle.id .. ' just became ready but is updating - will route after update completes')
+                    end
+                    -- Clear the flag so we don't route again
+                    turtle.just_became_ready = false
+                end
 
                 if turtle.state == 'park' then
                     -- TURTLE FOUND PARKING
@@ -128,8 +301,9 @@ function command_turtles()
                                 table.insert(turtles_for_pair, turtle)
                             end
                         else
-                            if not (state.pair_hold[1].pair and state.pair_hold[2].pair) then
-                                state.pair_hold = nil
+                            local state_refresh = API.getState()
+                            if state_refresh.pair_hold and not (state_refresh.pair_hold[1].pair and state_refresh.pair_hold[2].pair) then
+                                API.setStateValue('pair_hold', nil)
                             end
                         end
                     else
@@ -250,7 +424,7 @@ function command_turtles()
                                 print('Turtle ' .. turtle.id .. ' at disk drive. Starting update...')
                                 -- Clear any existing tasks before sending update command
                                 turtle.tasks = {}
-                                rednet.send(turtle.id, {
+                                DataThread.send(turtle.id, {
                                     action = 'update',
                                 }, 'mastermine')
                             end

@@ -1,165 +1,133 @@
 -- ============================================
--- Shared API Initialization
--- Load this file at the start of any thread that needs APIs
+-- API Proxy
+-- Provides API interface that requests data from data thread
+-- Data thread is the ONLY place APIs are actually loaded
 -- ============================================
 
--- ============================================
--- API Manager Class
--- Centralized data store with getters/setters
--- ============================================
-local API = {}
-API.__index = API
-
--- Shared data storage (global so all threads share the same state)
--- Use a global table so all threads/modules share the same data
--- In ComputerCraft, multishell threads are coroutines that share _G, so this works across threads
-if not _G._API_DATA then
-    _G._API_DATA = {
-        config = nil,
-        state = nil,
-        utilities = nil,
-        loaded = false
-    }
-end
--- All threads reference the same global table
-local _data = _G._API_DATA
-
--- Determine the base path for loading files
+-- Load data thread API first
 local function get_api_path(filename)
-    -- Try absolute path first (most reliable)
     if fs.exists('/apis/' .. filename) then
         return '/apis/' .. filename
     end
-    -- Fallback to relative path
     if fs.exists('apis/' .. filename) then
         return 'apis/' .. filename
     end
-    -- If neither exists, return absolute path anyway (will error with helpful message)
     return '/apis/' .. filename
 end
 
--- Getters
+-- Load data thread API
+if not DataThread then
+    local func = loadfile(get_api_path('data_thread_api.lua'))
+    if func then 
+        func()
+    else
+        error("Failed to load data_thread_api.lua")
+    end
+end
+
+-- Wait for data thread to initialize
+while not DataThread.isInitialized() do
+    sleep(0.1)
+end
+
+-- API Proxy Class - requests data from data thread instead of loading it
+local API = {}
+API.__index = API
+
+-- Cache for frequently accessed data (threads can cache what they need)
+local _cache = {
+    config = nil,
+    state = nil,
+    utilities = nil,
+    cache_time = {}
+}
+
+-- Cache timeout (refresh cache after this many seconds)
+local CACHE_TIMEOUT = 0.1  -- Very short - data changes frequently
+
+-- Helper to update state through data thread
+function API.setStateValue(path, value)
+    DataThread.updateData('state.' .. path, value)
+    -- Clear cache to force refresh
+    _cache.state = nil
+    _cache.cache_time.state = nil
+end
+
+-- Helper to update config through data thread  
+function API.setConfigValue(path, value)
+    DataThread.updateData('config.' .. path, value)
+    -- Clear cache to force refresh
+    _cache.config = nil
+    _cache.cache_time.config = nil
+end
+
+-- Helper to update turtle properties through data thread
+function API.updateTurtle(turtle_id, property, value)
+    DataThread.updateData('state.turtles.' .. turtle_id .. '.' .. property, value)
+    -- Clear cache to force refresh
+    _cache.state = nil
+    _cache.cache_time.state = nil
+end
+
+-- Helper to get a turtle (with caching)
+function API.getTurtle(turtle_id)
+    local state_refresh = API.getState()
+    return state_refresh.turtles[turtle_id]
+end
+
+-- Get config (with caching)
 function API.getConfig()
-    return _data.config
+    local now = os.clock()
+    if not _cache.config or (now - (_cache.cache_time.config or 0)) > CACHE_TIMEOUT then
+        _cache.config = DataThread.getData('config')
+        _cache.cache_time.config = now
+    end
+    return _cache.config
 end
 
+-- Get state (with caching and proxy for auto-sync)
 function API.getState()
-    return _data.state
+    local now = os.clock()
+    if not _cache.state or (now - (_cache.cache_time.state or 0)) > CACHE_TIMEOUT then
+        local state_data = DataThread.getData('state')
+        _cache.state = createStateProxy(state_data)
+        _cache.cache_time.state = now
+    end
+    return _cache.state
 end
 
+-- Get utilities (with caching)
 function API.getUtilities()
-    return _data.utilities
+    local now = os.clock()
+    if not _cache.utilities or (now - (_cache.cache_time.utilities or 0)) > CACHE_TIMEOUT then
+        _cache.utilities = DataThread.getData('utilities')
+        _cache.cache_time.utilities = now
+    end
+    return _cache.utilities
 end
 
+-- Update state (clears cache and updates data thread)
+function API.updateState(path, value)
+    _cache.state = nil  -- Clear cache
+    _cache.cache_time.state = nil
+    return DataThread.updateData('state.' .. path, value)
+end
+
+-- Update config (clears cache and updates data thread)
+function API.updateConfig(path, value)
+    _cache.config = nil  -- Clear cache
+    _cache.cache_time.config = nil
+    return DataThread.updateData('config.' .. path, value)
+end
+
+-- Check if APIs are loaded (always true since data thread handles it)
 function API.isLoaded()
-    return _data.loaded
-end
-
--- Setters
-function API.setConfig(newConfig)
-    _data.config = newConfig
-end
-
-function API.setState(newState)
-    _data.state = newState
-end
-
-function API.setUtilities(newUtilities)
-    _data.utilities = newUtilities
-end
-
--- Initialize function - loads all APIs
-function API.init()
-    if _data.loaded then
-        return -- Already initialized
-    end
-    
-    -- Load config
-    if not _data.config then
-        local config_path = get_api_path('config.lua')
-        local func = loadfile(config_path)
-        if not func then
-            error("Failed to load config.lua from: " .. config_path)
-        end
-        _data.config = func()
-        if not _data.config then
-            error("Failed to load config.lua - file returned nil")
-        end
-    end
-    
-    -- Load state
-    if not _data.state then
-        local state_path = get_api_path('state.lua')
-        local func = loadfile(state_path)
-        if not func then
-            error("Failed to load state.lua from: " .. state_path)
-        end
-        _data.state = func()
-        if not _data.state then
-            error("Failed to load state.lua - file returned nil")
-        end
-    end
-    
-    -- Load utilities
-    if not _data.utilities then
-        local utilities_path = get_api_path('utilities.lua')
-        local func = loadfile(utilities_path)
-        if not func then
-            error("Failed to load utilities.lua from: " .. utilities_path)
-        end
-        local result = func()
-        
-        if result then
-            -- File returned a table, use it
-            _data.utilities = result
-        else
-            -- File didn't return anything, error (utilities.lua should return a table)
-            error("Failed to load utilities.lua - file returned nil. utilities.lua must return a table.")
-        end
-        
-        if not _data.utilities then
-            error("Failed to load utilities.lua - could not create utilities table")
-        end
-    end
-    
-    -- Load all other API modules (these create global functions)
-    -- Only load if not already loaded (check for a function from each module)
-    if not load_mine then
-        local func = loadfile(get_api_path('block_management.lua'))
-        if func then func() end
-    end
-    
-    if not get_closest_unmined_block then
-        local func = loadfile(get_api_path('turtle_assignment.lua'))
-        if func then func() end
-    end
-    
-    if not get_hub_version then
-        local func = loadfile(get_api_path('version_management.lua'))
-        if func then func() end
-    end
-    
-    if not add_task then
-        local func = loadfile(get_api_path('task_management.lua'))
-        if func then func() end
-    end
-    
-    if type(user_input) ~= "function" then
-        local func = loadfile(get_api_path('user_commands.lua'))
-        if func then func() end
-    end
-    
-    if not command_turtles then
-        local func = loadfile(get_api_path('state_machine.lua'))
-        if func then func() end
-    end
-    
-    _data.loaded = true
+    return DataThread.isInitialized()
 end
 
 -- Make API globally accessible
 _G.API = API
 
--- Auto-initialize when this file is loaded
-API.init()
-
+-- Note: We don't auto-load APIs here anymore - data thread does that
+-- Other API modules (task_management, state_machine, etc.) will be loaded
+-- by the data thread and their functions will be available globally

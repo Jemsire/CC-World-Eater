@@ -96,18 +96,19 @@ end
 
 function gen_next_block()
     -- Generate next block assignment and calculate fuel requirements
-    state.next_block = get_closest_unmined_block()
-    if state.next_block then
+    local next_block = get_closest_unmined_block()
+    API.setStateValue('next_block', next_block)
+    if next_block then
         -- Calculate fuel needed: distance to block + depth to bedrock * 2 (down and back) + padding
         local surface_y = config.locations.mining_center.y + 2  -- Surface level
         local distance_to_block = utilities.distance(
-            {x = state.next_block.x, y = surface_y, z = state.next_block.z},
+            {x = next_block.x, y = surface_y, z = next_block.z},
             config.locations.mine_enter
         )
         local depth = surface_y - config.bedrock_level  -- Depth from surface to bedrock
-        state.min_fuel = (distance_to_block + depth * 2 + config.fuel_padding) * 3
+        API.setStateValue('min_fuel', (distance_to_block + depth * 2 + config.fuel_padding) * 3)
     else
-        state.min_fuel = nil
+        API.setStateValue('min_fuel', nil)
     end
 end
 
@@ -153,7 +154,7 @@ end
 
 
 function pair_turtles_finish()
-    state.pair_hold = nil
+    API.setStateValue('pair_hold', nil)
 end
 
 
@@ -175,11 +176,13 @@ function pair_turtles_begin(turtle1, turtle2)
         mining_turtle = turtle2
     end
     
-    local block = state.next_block
+    local state_refresh = API.getState()
+    local block = state_refresh.next_block
     
     if not block then
         gen_next_block()
-        block = state.next_block
+        state_refresh = API.getState()
+        block = state_refresh.next_block
         if not block then
             add_task(mining_turtle, {action = 'pass', end_state = 'idle'})
             add_task(chunky_turtle, {action = 'pass', end_state = 'idle'})
@@ -192,7 +195,7 @@ function pair_turtles_begin(turtle1, turtle2)
     mining_turtle.pair = chunky_turtle
     chunky_turtle.pair = mining_turtle
     
-    state.pair_hold = {mining_turtle, chunky_turtle}
+    API.setStateValue('pair_hold', {mining_turtle, chunky_turtle})
     
     -- Assign block to both turtles
     mining_turtle.block = block
@@ -203,8 +206,9 @@ function pair_turtles_begin(turtle1, turtle2)
     write_turtle_block(chunky_turtle, block)
     
     -- Mark as deployed (mining in progress)
-    fs.open(state.turtles_dir_path .. chunky_turtle.id .. '/deployed', 'w').close()
-    local file = fs.open(state.turtles_dir_path .. mining_turtle.id .. '/deployed', 'w')
+    state_refresh = API.getState()
+    fs.open(state_refresh.turtles_dir_path .. chunky_turtle.id .. '/deployed', 'w').close()
+    local file = fs.open(state_refresh.turtles_dir_path .. mining_turtle.id .. '/deployed', 'w')
     file.write(config.locations.mining_center.y + 2)  -- Start depth (surface)
     file.close()
     
@@ -246,11 +250,13 @@ end
 
 function solo_turtle_begin(turtle)
     -- Assigns blocks to solo turtles for mining
-    local block = state.next_block
+    local state_refresh = API.getState()
+    local block = state_refresh.next_block
     
     if not block then
         gen_next_block()
-        block = state.next_block
+        state_refresh = API.getState()
+        block = state_refresh.next_block
         if not block then
             add_task(turtle, {action = 'pass', end_state = 'idle'})
             return
@@ -264,7 +270,8 @@ function solo_turtle_begin(turtle)
     write_turtle_block(turtle, block)
     
     -- Mark as deployed (mining in progress)
-    local file = fs.open(state.turtles_dir_path .. turtle.id .. '/deployed', 'w')
+    state_refresh = API.getState()
+    local file = fs.open(state_refresh.turtles_dir_path .. turtle.id .. '/deployed', 'w')
     file.write(config.locations.mining_center.y + 2)  -- Start depth (surface)
     file.close()
     
@@ -347,9 +354,10 @@ end
 
 
 function check_pair_fuel(turtle)
-    if state.min_fuel then
-        if (turtle.data.fuel_level ~= "unlimited" and turtle.data.fuel_level <= state.min_fuel) then
-            add_task(turtle, {action = 'prepare', data = {state.min_fuel}})
+    local state_refresh = API.getState()
+    if state_refresh.min_fuel then
+        if (turtle.data.fuel_level ~= "unlimited" and turtle.data.fuel_level <= state_refresh.min_fuel) then
+            add_task(turtle, {action = 'prepare', data = {state_refresh.min_fuel}})
         else
             add_task(turtle, {action = 'pass', end_state = 'pair'})
         end

@@ -4,6 +4,12 @@
 -- ============================================
 
 function go_to_home()
+    -- Check if config.locations is available (turtle needs to be fully initialized by hub first)
+    if not config.locations then
+        print('ERROR: Cannot go_to_home - config.locations not set. Waiting for hub initialization...')
+        return false
+    end
+    
     state.updated_not_home = nil
     if utilities.in_area(state.location, config.locations.home_area) then
         return true

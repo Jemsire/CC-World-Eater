@@ -77,9 +77,14 @@ function check_turtle_versions()
     end
     
     for _, turtle in pairs(state.turtles) do
-        -- Skip turtles that are already updating, halted, or awaiting version verification
-        if not turtle.data or turtle.state == 'updating' or turtle.state == 'halt' or turtle.update_complete then
-            -- Skip this turtle
+        -- Skip turtles that are already updating, halted, awaiting version verification, or not initialized
+        -- Uninitialized turtles (session_id mismatch) need to initialize first before checking for updates
+        if not turtle.data or 
+           turtle.state == 'updating' or 
+           turtle.state == 'halt' or 
+           turtle.update_complete or
+           (session_id and turtle.data.session_id ~= session_id) then
+            -- Skip this turtle (including uninitialized ones - they need to initialize first)
         else
             -- Check if turtle already has a task queued that will set it to updating state
             local has_update_task = false
@@ -102,6 +107,7 @@ function check_turtle_versions()
                 if turtle.force_update then
                     needs_update = true
                 -- If turtle has no version data, consider it out of date
+                -- (but only if initialized - uninitialized turtles are skipped above)
                 elseif not turtle.data.version then
                     needs_update = true
                 elseif turtle.data.version then
@@ -130,6 +136,57 @@ function check_turtle_versions()
                 end
             end
         end
+    end
+end
+
+
+function check_turtle_version_on_init(turtle)
+    -- Check if a specific turtle needs an update when it first reports
+    -- Called when turtle sends initialization_report
+    local hub_version = get_hub_version()
+    if not hub_version then
+        -- Can't check versions if hub version not available
+        return
+    end
+    
+    -- Skip if turtle is already updating or halted
+    if turtle.state == 'updating' or turtle.state == 'halt' or turtle.update_complete then
+        return
+    end
+    
+    local needs_update = false
+    
+    -- Check if turtle has force_update flag set
+    if turtle.force_update then
+        needs_update = true
+    -- If turtle has no version data, consider it out of date
+    elseif not turtle.data.version then
+        needs_update = true
+    elseif turtle.data.version then
+        local turtle_version = turtle.data.version
+        local comparison = compare_versions(turtle_version, hub_version)
+        
+        -- If turtle version is older than hub version, needs update
+        if comparison and comparison < 0 then
+            needs_update = true
+        end
+    end
+    
+    if needs_update then
+        if turtle.force_update then
+            print('Turtle ' .. turtle.id .. ' force update requested. Setting to updating state...')
+            turtle.force_update = nil  -- Clear flag after using it
+        else
+            print('Turtle ' .. turtle.id .. ' is out of date (version: ' .. 
+                  (turtle.data.version and (turtle.data.version.major .. '.' .. turtle.data.version.minor .. '.' .. turtle.data.version.patch) or 'unknown') ..
+                  ', hub: ' .. (hub_version.major .. '.' .. hub_version.minor .. '.' .. hub_version.patch) ..
+                  '). Setting to updating state...')
+        end
+        -- Free turtle from any block assignment
+        free_turtle(turtle)
+        -- Clear tasks and set to updating state IMMEDIATELY
+        turtle.tasks = {}
+        turtle.state = 'updating'
     end
 end
 
@@ -175,8 +232,8 @@ function queue_turtles_for_update(turtle_list, update_hub_after, force_update)
         end
     end
     
-    state.update_hub_after = update_hub_after
-    state.force_update = force_update or false
+    API.setStateValue('update_hub_after', update_hub_after)
+    API.setStateValue('force_update', force_update or false)
 end
 
 

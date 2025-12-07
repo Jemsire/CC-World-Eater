@@ -16,7 +16,7 @@ while true do
         turtle_count = turtle_count + 1
     end
 
-    rednet.broadcast({
+    DataThread.broadcast({
             on             = state.on,
             turtles_parked = turtles_parked,
             turtle_count   = turtle_count,
