@@ -39,6 +39,14 @@ end
 -- Load state if not already loaded
 if not state then
     loadfile('apis/state.lua')()
+    -- Create state table to reference globals from state.lua (for compatibility with code that uses state.*)
+    -- Make sure the globals exist before referencing them
+    state = {
+        user_input = user_input or {},
+        turtles = turtles or {},
+        pockets = pockets or {},
+        homes = homes or {}
+    }
 end
 
 -- Load utilities if not already loaded
