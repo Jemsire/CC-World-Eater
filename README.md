@@ -9,6 +9,10 @@
 
 A fully automated world-eating mining system for ComputerCraft turtles! Mines entire areas from surface to bedrock using coordinated multi-turtle operations.
 
+
+# NOT IN FUNCTIONAL STATE - BREAKING CHANGES CONSTANT - WAIT FOR 1.0.0 TO USE!
+```^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^```
+
 ## 🚀 Quick Start
 
 ### Prep Area (Setup)
