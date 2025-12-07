@@ -700,15 +700,20 @@ function queue_turtles_for_update(turtle_list, update_hub_after, force_update)
         turtle.tasks = {}
         turtle.update_pending = true
         turtle.update_complete = false
+        turtle.update_wait_start = nil  -- Reset wait timer
         -- Mark turtle for force update if requested
         if force_update then
             turtle.force_update = true
         end
         table.insert(state.update_queue, turtle.id)
+        print('Queued turtle ' .. turtle.id .. ' for update')
     end
     
     state.update_hub_after = update_hub_after
     state.force_update = force_update or false
+    
+    print('Update queue initialized with ' .. #state.update_queue .. ' turtle(s)')
+    print('update_hub_after = ' .. tostring(update_hub_after))
     
     -- Start processing queue
     process_update_queue()
@@ -720,6 +725,45 @@ function process_update_queue()
     if state.update_in_progress or not state.update_queue or #state.update_queue == 0 then
         -- Queue empty or already processing
         if #state.update_queue == 0 and state.update_hub_after then
+            -- Only update hub if we actually processed turtles (not if queue was empty from start)
+            -- Check if any turtles were actually commanded or updated
+            local any_turtles_processed = false
+            for _, turtle in pairs(state.turtles) do
+                if turtle.update_complete or turtle.update_sent_home or turtle.update_sent_to_disk then
+                    any_turtles_processed = true
+                    break
+                end
+            end
+            
+            -- If no turtles were found/processed, don't update hub immediately
+            -- Wait a bit to see if turtles show up and get commanded
+            if not any_turtles_processed then
+                print('No turtles found to update. Waiting 5 seconds for turtles to report...')
+                sleep(5)
+                -- Check one more time for turtles
+                local turtle_list = {}
+                for _, turtle in pairs(state.turtles) do
+                    if turtle.data then
+                        table.insert(turtle_list, turtle)
+                    end
+                end
+                if #turtle_list > 0 then
+                    print('Found ' .. #turtle_list .. ' turtle(s). Queuing for update...')
+                    for _, turtle in pairs(turtle_list) do
+                        turtle.tasks = {}
+                        turtle.update_pending = true
+                        turtle.update_complete = false
+                        turtle.update_wait_start = nil
+                        table.insert(state.update_queue, turtle.id)
+                    end
+                    -- Process the queue instead of updating hub
+                    process_update_queue()
+                    return
+                else
+                    print('Still no turtles found. Updating hub only...')
+                end
+            end
+            
             print('All turtles updated. Updating hub...')
             sleep(1)
             if state.force_update then
@@ -746,8 +790,21 @@ function process_update_queue()
     -- Wait for turtle to have data before processing
     if not turtle.data then
         -- Turtle hasn't reported yet, wait for next cycle
+        -- But don't let this block forever - if we've been waiting too long, skip this turtle
+        if not turtle.update_wait_start then
+            turtle.update_wait_start = os.clock()
+        elseif os.clock() - turtle.update_wait_start > 10 then
+            -- Waited more than 10 seconds, remove from queue
+            print('Turtle ' .. turtle_id .. ' not responding, removing from update queue')
+            table.remove(state.update_queue, 1)
+            turtle.update_wait_start = nil
+            process_update_queue()
+        end
         return
     end
+    
+    -- Clear wait timer if turtle now has data
+    turtle.update_wait_start = nil
     
     -- Check turtle location
     local is_home = false
