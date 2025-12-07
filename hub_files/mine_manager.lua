@@ -162,7 +162,9 @@ end
 
 
 function unhalt(turtle)
-    fs.delete(state.turtles_dir_path .. turtle.id .. '/halt', 'w')
+    if fs.exists(state.turtles_dir_path .. turtle.id .. '/halt') then
+        fs.delete(state.turtles_dir_path .. turtle.id .. '/halt')
+    end
 end
 
 
@@ -1235,6 +1237,11 @@ function command_turtles()
                     
                 elseif turtle.state == 'updating' then
                     -- TURTLE IS UPDATING
+                    -- First, ensure turtle is not halted (clear halt if it exists)
+                    if fs.exists(state.turtles_dir_path .. turtle.id .. '/halt') then
+                        unhalt(turtle)
+                    end
+                    
                     -- Check if turtle needs to return home first
                     local is_home = false
                     local is_at_disk = false
@@ -1267,7 +1274,8 @@ function command_turtles()
                                 -- Clear waiting flag and send update command
                                 turtle.update_waiting_at_disk = nil
                                 print('Turtle ' .. turtle.id .. ' at disk drive. Starting update...')
-                                halt(turtle)
+                                -- Clear any existing tasks before sending update command
+                                turtle.tasks = {}
                                 rednet.send(turtle.id, {
                                     action = 'update',
                                 }, 'mastermine')
@@ -1276,23 +1284,30 @@ function command_turtles()
                     elseif is_near_home then
                         -- Turtle is near home, navigate to disk drive
                         if not turtle.update_sent_to_disk and not turtle.update_waiting_at_disk then
-                            halt(turtle)
                             add_task(turtle, {
                                 action = 'go_to_disk',
                                 end_state = 'updating',  -- Stay in updating state
                             })
                             -- Don't set update_sent_to_disk yet - wait until turtle reaches disk
                         end
-                    else
-                        -- Turtle needs to return home first
+                    elseif turtle.data and turtle.data.location then
+                        -- Turtle needs to return home first (only if we have location data)
                         if not turtle.update_sent_home then
-                            halt(turtle)
                             send_turtle_up(turtle)
                             add_task(turtle, {
                                 action = 'go_to_home',
                                 end_state = 'updating',  -- Stay in updating state
                             })
                             turtle.update_sent_home = true
+                        end
+                    else
+                        -- Turtle doesn't have location data - need to calibrate first
+                        if not turtle.update_sent_home then
+                            add_task(turtle, {
+                                action = 'calibrate',
+                                end_state = 'updating',  -- Stay in updating state after calibration
+                            })
+                            turtle.update_sent_home = true  -- Mark that we've started the update process
                         end
                     end
                     
