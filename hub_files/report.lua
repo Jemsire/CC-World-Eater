@@ -1,9 +1,3 @@
--- Load all APIs through init_apis.lua (handles all API loading)
-loadfile('/init_apis.lua')()
-
--- Get references from API class
-local state = API.getState()
-
 -- CONTINUOUSLY BROADCAST STATUS REPORTS
 while true do
     
@@ -16,7 +10,7 @@ while true do
         turtle_count = turtle_count + 1
     end
 
-    DataThread.broadcast({
+    rednet.broadcast({
             on             = state.on,
             turtles_parked = turtles_parked,
             turtle_count   = turtle_count,

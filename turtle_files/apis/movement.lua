@@ -2,9 +2,7 @@
 -- Movement Module
 -- Basic movement and direction functions
 -- ============================================
-
-inf = utilities.inf
-str_xyz = utilities.str_xyz
+-- Uses globals: inf, str_xyz (from utilities, loaded via os.loadAPI)
 
 bumps = {
     north = { 0,  0, -1},
@@ -179,6 +177,11 @@ function face(orientation)
 end
 
 function log_movement(direction)
+    -- Safety check: ensure state.location exists before updating it
+    if not state.location then
+        return true  -- Can't log movement without a starting location
+    end
+    
     if direction == 'up' then
         state.location.y = state.location.y +1
     elseif direction == 'down' then
@@ -281,10 +284,10 @@ function go_route(route, xyzo)
     if xyzo then
         xyz_string = str_xyz(xyzo)
     end
-    local location_str = utilities.str_xyz(state.location)
+    local location_str = str_xyz(state.location)
     while route[location_str] and location_str ~= xyz_string do
         if not go_to(route[location_str], nil, 'xyz') then return false end
-        location_str = utilities.str_xyz(state.location)
+        location_str = str_xyz(state.location)
     end
     if xyzo then
         if location_str ~= xyz_string then

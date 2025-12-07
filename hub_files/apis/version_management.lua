@@ -2,11 +2,7 @@
 -- Version Management Module
 -- Handles version checking and update coordination
 -- ============================================
-
--- Get API references
-local config = API.getConfig()
-local state = API.getState()
-local utilities = API.getUtilities()
+-- Uses globals: config, state (loaded via os.loadAPI)
 
 function get_hub_version()
     -- Load version from version.lua file
@@ -232,8 +228,8 @@ function queue_turtles_for_update(turtle_list, update_hub_after, force_update)
         end
     end
     
-    API.setStateValue('update_hub_after', update_hub_after)
-    API.setStateValue('force_update', force_update or false)
+    state.update_hub_after = update_hub_after
+    state.force_update = force_update or false
 end
 
 
@@ -242,7 +238,7 @@ function count_turtles_at_disk()
     local count = 0
             for _, turtle in pairs(state.turtles) do
         if turtle.data and turtle.data.location and turtle.state == 'updating' then
-            if utilities.in_location(turtle.data.location, config.locations.disk_drive) then
+            if in_location(turtle.data.location, config.locations.disk_drive) then
                 count = count + 1
                 end
             end
@@ -330,4 +326,16 @@ function verify_turtle_version_after_update(turtle)
         return false
     end
 end
+
+-- Expose functions as globals (os.loadAPI wraps them into API table)
+-- Assign to global environment explicitly
+_G.get_hub_version = get_hub_version
+_G.is_dev_version = is_dev_version
+_G.compare_versions = compare_versions
+_G.check_turtle_versions = check_turtle_versions
+_G.check_turtle_version_on_init = check_turtle_version_on_init
+_G.queue_turtles_for_update = queue_turtles_for_update
+_G.count_turtles_at_disk = count_turtles_at_disk
+_G.on_update_complete = on_update_complete
+_G.verify_turtle_version_after_update = verify_turtle_version_after_update
 

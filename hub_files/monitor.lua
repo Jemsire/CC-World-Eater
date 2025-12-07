@@ -1,10 +1,4 @@
--- Load all APIs through init_apis.lua (handles all API loading)
-loadfile('/init_apis.lua')()
-
--- Get references from API class
-local config = API.getConfig()
-local state = API.getState()
-local utilities = API.getUtilities()
+-- APIs are loaded by startup.lua - this file uses globals from there
 
 menu_lines = {
     '##### ##### ##### ##### #####',

@@ -2,10 +2,7 @@
 -- Block Management Module
 -- Handles tracking of mined blocks
 -- ============================================
-
--- Get API references
-local config = API.getConfig()
-local state = API.getState()
+-- Uses globals: config, state (loaded via os.loadAPI)
 
 function load_mine()
     -- LOAD MINE INTO state.mine FROM /mine/<x,z>/ DIRECTORY
@@ -16,27 +13,24 @@ function load_mine()
         error("load_mine() failed: config.locations.mine_enter is not defined. Check config.lua")
     end
     
-    local mine_dir_path = '/mine/' .. config.locations.mine_enter.x .. ',' .. config.locations.mine_enter.z .. '/'
-    API.setStateValue('mine_dir_path', mine_dir_path)
+    state.mine_dir_path = '/mine/' .. config.locations.mine_enter.x .. ',' .. config.locations.mine_enter.z .. '/'
     
-    if not fs.exists(mine_dir_path) then
-        fs.makeDir(mine_dir_path)
+    if not fs.exists(state.mine_dir_path) then
+        fs.makeDir(state.mine_dir_path)
     end
     
-    if fs.exists(mine_dir_path .. 'on') then
-        API.setStateValue('on', true)
+    if fs.exists(state.mine_dir_path .. 'on') then
+        state.on = true
     end
     
     -- Load mined blocks
-    API.setStateValue('mined_blocks', {})
-    local state_refresh = API.getState()
-    local mined_blocks_dir = state_refresh.mine_dir_path .. 'mined_blocks/'
+    state.mined_blocks = {}
+    local mined_blocks_dir = state.mine_dir_path .. 'mined_blocks/'
     
     if not fs.exists(mined_blocks_dir) then
         fs.makeDir(mined_blocks_dir)
     else
         -- Load all mined block files
-        local mined_blocks = {}
         for _, file_name in pairs(fs.list(mined_blocks_dir)) do
             if file_name:sub(1, 1) ~= '.' then
                 -- File name format: "x,z"
@@ -46,37 +40,34 @@ function load_mine()
                 end
                 if #coords == 2 then
                     local x, z = coords[1], coords[2]
-                    if not mined_blocks[x] then
-                        mined_blocks[x] = {}
+                    if not state.mined_blocks[x] then
+                        state.mined_blocks[x] = {}
                     end
-                    mined_blocks[x][z] = true
+                    state.mined_blocks[x][z] = true
                 end
             end
         end
-        API.setStateValue('mined_blocks', mined_blocks)
-        state_refresh = API.getState()
     end
     
     -- Set state.mine flag for monitor compatibility (ALWAYS set this, even if no blocks loaded)
-    API.setStateValue('mine', true)
+    state.mine = true
     
-    local turtles_dir_path = state_refresh.mine_dir_path .. 'turtles/'
-    API.setStateValue('turtles_dir_path', turtles_dir_path)
+    state.turtles_dir_path = state.mine_dir_path .. 'turtles/'
     
-    if not fs.exists(turtles_dir_path) then
-        fs.makeDir(turtles_dir_path)
+    if not fs.exists(state.turtles_dir_path) then
+        fs.makeDir(state.turtles_dir_path)
     end
     
     -- Load turtle assignments
-    for _, turtle_id in pairs(fs.list(turtles_dir_path)) do
+    for _, turtle_id in pairs(fs.list(state.turtles_dir_path)) do
         if turtle_id:sub(1, 1) ~= '.' then
             turtle_id = tonumber(turtle_id)
             local turtle = {
                 id = turtle_id,
                 tasks = {}  -- Initialize tasks array to prevent nil errors
             }
-            DataThread.updateData('state.turtles.' .. turtle_id, turtle)
-            local turtle_dir_path = turtles_dir_path .. turtle_id .. '/'
+            state.turtles[turtle_id] = turtle
+            local turtle_dir_path = state.turtles_dir_path .. turtle_id .. '/'
             
             -- Load block assignment
             if fs.exists(turtle_dir_path .. 'block') then
@@ -123,17 +114,16 @@ end
 
 function mark_block_mined(x, z)
     -- Mark a block as completely mined to bedrock
-    local state_refresh = API.getState()
-    local mined_blocks = state_refresh.mined_blocks or {}
-    if not mined_blocks[x] then
-        mined_blocks[x] = {}
+    if not state.mined_blocks then
+        state.mined_blocks = {}
     end
-    mined_blocks[x][z] = true
-    API.setStateValue('mined_blocks', mined_blocks)
+    if not state.mined_blocks[x] then
+        state.mined_blocks[x] = {}
+    end
+    state.mined_blocks[x][z] = true
     
     -- Write to disk
-    state_refresh = API.getState()
-    local mined_blocks_dir = state_refresh.mine_dir_path .. 'mined_blocks/'
+    local mined_blocks_dir = state.mine_dir_path .. 'mined_blocks/'
     if not fs.exists(mined_blocks_dir) then
         fs.makeDir(mined_blocks_dir)
     end
@@ -144,8 +134,7 @@ end
 
 function write_turtle_block(turtle, block)
     -- Record turtle's assigned block
-    local state_refresh = API.getState()
-    local file = fs.open(state_refresh.turtles_dir_path .. turtle.id .. '/block', 'w')
+    local file = fs.open(state.turtles_dir_path .. turtle.id .. '/block', 'w')
     file.write(block.x .. ',' .. block.z)
     file.close()
 end
@@ -156,10 +145,17 @@ function update_block(turtle)
     local block = turtle.block
     if block then
         -- Check if turtle reached bedrock level
-        local config = API.getConfig()
         if turtle.data.location and turtle.data.location.y <= config.bedrock_level then
             mark_block_mined(block.x, block.z)
         end
     end
 end
+
+-- Expose functions as globals (os.loadAPI wraps them into API table)
+-- Assign to global environment explicitly
+_G.load_mine = load_mine
+_G.is_block_mined = is_block_mined
+_G.mark_block_mined = mark_block_mined
+_G.write_turtle_block = write_turtle_block
+_G.update_block = update_block
 

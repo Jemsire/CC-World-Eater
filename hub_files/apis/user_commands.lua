@@ -2,10 +2,7 @@
 -- User Commands Module
 -- Handles user input processing
 -- ============================================
-
--- Get API references
-local config = API.getConfig()
-local state = API.getState()
+-- Uses globals: config, state (loaded via os.loadAPI)
 
 function user_input(input)
     -- PROCESS USER INPUT FROM USER_INPUT TABLE
@@ -50,7 +47,7 @@ function user_input(input)
                 for _, turtle in pairs(turtles) do
                     turtle.tasks = {}
                     add_task(turtle, {action = 'pass'})
-                    DataThread.send(turtle.id, {
+                    rednet.send(turtle.id, {
                         action = 'shutdown',
                     }, 'mastermine')
                 end
@@ -65,7 +62,7 @@ function user_input(input)
                 for _, turtle in pairs(turtles) do
                     turtle.tasks = {}
                     add_task(turtle, {action = 'pass'})
-                    DataThread.send(turtle.id, {
+                    rednet.send(turtle.id, {
                         action = 'reboot',
                     }, 'mastermine')
                 end
@@ -80,7 +77,7 @@ function user_input(input)
                         -- Clear tasks
                         turtle.tasks = {}
                         -- Send reboot command
-                        DataThread.send(turtle.id, {
+                        rednet.send(turtle.id, {
                             action = 'reboot',
                         }, 'mastermine')
                         rebooted_count = rebooted_count + 1
@@ -179,9 +176,8 @@ function user_input(input)
                     turtle.tasks = {}
                     add_task(turtle, {action = 'pass'})
                 end
-                API.setStateValue('on', true)
-                local state_refresh = API.getState()
-                fs.open(state_refresh.mine_dir_path .. 'on', 'w').close()
+                state.on = true
+                fs.open(state.mine_dir_path .. 'on', 'w').close()
             end
         elseif command == 'off' or command == 'stop' then
             -- STANDBY MINING NETWORK
@@ -191,9 +187,8 @@ function user_input(input)
                     add_task(turtle, {action = 'pass'})
                     free_turtle(turtle)
                 end
-                API.setStateValue('on', nil)
-                local state_refresh = API.getState()
-                fs.delete(state_refresh.mine_dir_path .. 'on')
+                state.on = nil
+                fs.delete(state.mine_dir_path .. 'on')
             end
         elseif command == 'check_init' or command == 'confirm_init' then
             -- CHECK INITIALIZATION STATUS AND REBOOT TURTLES WITH OLD SESSION_ID
@@ -204,4 +199,8 @@ function user_input(input)
         end
     end
 end
+
+-- Expose functions as globals (os.loadAPI wraps them into API table)
+-- Assign to global environment explicitly
+_G.user_input = user_input
 

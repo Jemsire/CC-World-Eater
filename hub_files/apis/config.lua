@@ -448,31 +448,4 @@ default_monitor_zoom_level = 0
 --     probably want the mine center
 default_monitor_location = {x = c.x, z = c.z}
 
--- Return config table (no global creation)
-return {
-    locations = locations,
-    use_chunky_turtles = use_chunky_turtles,
-    fuel_padding = fuel_padding,
-    fuel_per_unit = fuel_per_unit,
-    turtle_timeout = turtle_timeout,
-    pocket_timeout = pocket_timeout,
-    task_timeout = task_timeout,
-    dig_disallow = dig_disallow,
-    paths = paths,
-    mining_turtle_locations = mining_turtle_locations,
-    chunky_turtle_locations = chunky_turtle_locations,
-    gravitynames = gravitynames,
-    orenames = orenames,
-    blocktags = blocktags,
-    fuelnames = fuelnames,
-    monitor_max_zoom_level = monitor_max_zoom_level,
-    default_monitor_zoom_level = default_monitor_zoom_level,
-    default_monitor_location = default_monitor_location,
-    hub_reference = hub_reference,
-    mining_center = mining_center,
-    bedrock_level = bedrock_level,
-    mining_radius = mining_radius,
-    mining_area = mining_area,
-    mine_entrance = mine_entrance,
-    c = c
-}
+-- All config variables are now global (os.loadAPI style)

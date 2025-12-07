@@ -1,11 +1,10 @@
 -- GitHub API Helper Module
 -- Shared functions for interacting with GitHub API
 -- Used by update scripts to avoid code duplication
-
-local github_api = {}
+-- Uses os.loadAPI() style - sets globals
 
 -- Simple JSON parser for GitHub Trees API response
-function github_api.parse_json_simple(json_str)
+function parse_json_simple(json_str)
     -- Extract the tree array from the JSON response
     local tree_array = string.match(json_str, '"tree"%s*:%s*%[%s*(.*)%s*%]')
     if not tree_array then
@@ -27,7 +26,7 @@ function github_api.parse_json_simple(json_str)
 end
 
 -- Get the latest release tag from GitHub releases API
-function github_api.get_latest_release_tag(github_repo)
+function get_latest_release_tag(github_repo)
     -- Get the latest release tag from GitHub releases API
     local api_url = "https://api.github.com/repos/" .. github_repo .. "/releases/latest"
     local response = http.get(api_url, {
@@ -57,7 +56,7 @@ function github_api.get_latest_release_tag(github_repo)
 end
 
 -- Download file list from GitHub using API
-function github_api.get_file_tree(github_repo, github_branch)
+function get_file_tree(github_repo, github_branch)
     -- Use GitHub Trees API to get recursive file listing
     local api_url = "https://api.github.com/repos/" .. github_repo .. "/git/trees/" .. github_branch .. "?recursive=1"
     
@@ -79,7 +78,7 @@ function github_api.get_file_tree(github_repo, github_branch)
         json_data = textutils.unserializeJSON(content)
     else
         -- Fallback to simple parser
-        local file_paths = github_api.parse_json_simple(content)
+        local file_paths = parse_json_simple(content)
         if file_paths then
             json_data = {tree = {}}
             for _, path in ipairs(file_paths) do
@@ -94,6 +93,4 @@ function github_api.get_file_tree(github_repo, github_branch)
     
     return json_data.tree
 end
-
-return github_api
 

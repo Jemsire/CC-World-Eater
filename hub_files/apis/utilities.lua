@@ -78,3 +78,12 @@ function in_location(xyzo, location)
     return true
 end
 
+
+-- Expose functions and variables as globals (os.loadAPI wraps them into API table)
+-- Assign to global environment explicitly
+_G.inf = inf
+_G.dprint = dprint
+_G.str_xyz = str_xyz
+_G.distance = distance
+_G.in_area = in_area
+_G.in_location = in_location

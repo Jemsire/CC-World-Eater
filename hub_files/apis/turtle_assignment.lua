@@ -2,17 +2,14 @@
 -- Turtle Assignment Module
 -- Handles block assignment and turtle pairing
 -- ============================================
-
--- Get API references
-local config = API.getConfig()
-local state = API.getState()
-local utilities = API.getUtilities()
+-- Uses globals: config, state, inf, in_area, distance (loaded via os.loadAPI)
 
 function get_closest_unmined_block()
     -- Find the closest unmined block (x, z) starting from mining_center
     -- Spiral outward from mining_center to find closest unmined block
     local center = config.locations.mining_center
-    local min_dist = utilities.inf
+    -- Use inf if available, otherwise use a very large number
+    local min_dist = (inf and type(inf) == "number") and inf or 1e309
     local closest_block = nil
     
     -- Check mining radius if set (takes priority over mining_area)
@@ -29,10 +26,11 @@ function get_closest_unmined_block()
         max_z = center.z + radius
     else
         -- No radius, use mining_area bounds if set
-        min_x = config.mining_area and config.mining_area.min_x or -utilities.inf
-        max_x = config.mining_area and config.mining_area.max_x or utilities.inf
-        min_z = config.mining_area and config.mining_area.min_z or -utilities.inf
-        max_z = config.mining_area and config.mining_area.max_z or utilities.inf
+        local inf_value = (inf and type(inf) == "number") and inf or 1e309
+        min_x = config.mining_area and config.mining_area.min_x or -inf_value
+        max_x = config.mining_area and config.mining_area.max_x or inf_value
+        min_z = config.mining_area and config.mining_area.min_z or -inf_value
+        max_z = config.mining_area and config.mining_area.max_z or inf_value
     end
     
     -- Spiral outward from center
@@ -68,13 +66,17 @@ function get_closest_unmined_block()
                                 
                                 if not assigned then
                                     -- Calculate distance from mine_enter
-                                    local distance = utilities.distance(
-                                        {x = x, y = config.locations.mine_enter.y, z = z},
-                                        config.locations.mine_enter
-                                    )
-                                    if distance < min_dist then
-                                        min_dist = distance
-                                        closest_block = {x = x, z = z}
+                                    if config and config.locations and config.locations.mine_enter and 
+                                       config.locations.mine_enter.x and config.locations.mine_enter.y and config.locations.mine_enter.z and
+                                       distance then
+                                        local dist = distance(
+                                            {x = x, y = config.locations.mine_enter.y, z = z},
+                                            config.locations.mine_enter
+                                        )
+                                        if dist and type(dist) == "number" and dist < min_dist then
+                                            min_dist = dist
+                                            closest_block = {x = x, z = z}
+                                        end
                                     end
                                 end
                             end
@@ -96,19 +98,18 @@ end
 
 function gen_next_block()
     -- Generate next block assignment and calculate fuel requirements
-    local next_block = get_closest_unmined_block()
-    API.setStateValue('next_block', next_block)
-    if next_block then
+    state.next_block = get_closest_unmined_block()
+    if state.next_block then
         -- Calculate fuel needed: distance to block + depth to bedrock * 2 (down and back) + padding
         local surface_y = config.locations.mining_center.y + 2  -- Surface level
-        local distance_to_block = utilities.distance(
-            {x = next_block.x, y = surface_y, z = next_block.z},
+        local distance_to_block = distance(
+            {x = state.next_block.x, y = surface_y, z = state.next_block.z},
             config.locations.mine_enter
         )
         local depth = surface_y - config.bedrock_level  -- Depth from surface to bedrock
-        API.setStateValue('min_fuel', (distance_to_block + depth * 2 + config.fuel_padding) * 3)
+        state.min_fuel = (distance_to_block + depth * 2 + config.fuel_padding) * 3
     else
-        API.setStateValue('min_fuel', nil)
+        state.min_fuel = nil
     end
 end
 
@@ -118,7 +119,7 @@ function good_on_fuel(mining_turtle, chunky_turtle)
     local current_depth = mining_turtle.data.location.y
     local surface_y = config.locations.mining_center.y + 2
     local depth_to_surface = surface_y - current_depth
-    local distance_to_exit = utilities.distance(mining_turtle.data.location, config.locations.mine_exit)
+    local distance_to_exit = distance(mining_turtle.data.location, config.locations.mine_exit)
     local fuel_needed = math.ceil((depth_to_surface + distance_to_exit) * 1.5)
     
     return (mining_turtle.data.fuel_level == "unlimited" or mining_turtle.data.fuel_level > fuel_needed) and ((not config.use_chunky_turtles) or (chunky_turtle.data.fuel_level == "unlimited" or chunky_turtle.data.fuel_level > fuel_needed))
@@ -154,7 +155,7 @@ end
 
 
 function pair_turtles_finish()
-    API.setStateValue('pair_hold', nil)
+    state.pair_hold = nil
 end
 
 
@@ -176,13 +177,11 @@ function pair_turtles_begin(turtle1, turtle2)
         mining_turtle = turtle2
     end
     
-    local state_refresh = API.getState()
-    local block = state_refresh.next_block
+    local block = state.next_block
     
     if not block then
         gen_next_block()
-        state_refresh = API.getState()
-        block = state_refresh.next_block
+        block = state.next_block
         if not block then
             add_task(mining_turtle, {action = 'pass', end_state = 'idle'})
             add_task(chunky_turtle, {action = 'pass', end_state = 'idle'})
@@ -195,7 +194,7 @@ function pair_turtles_begin(turtle1, turtle2)
     mining_turtle.pair = chunky_turtle
     chunky_turtle.pair = mining_turtle
     
-    API.setStateValue('pair_hold', {mining_turtle, chunky_turtle})
+    state.pair_hold = {mining_turtle, chunky_turtle}
     
     -- Assign block to both turtles
     mining_turtle.block = block
@@ -206,9 +205,8 @@ function pair_turtles_begin(turtle1, turtle2)
     write_turtle_block(chunky_turtle, block)
     
     -- Mark as deployed (mining in progress)
-    state_refresh = API.getState()
-    fs.open(state_refresh.turtles_dir_path .. chunky_turtle.id .. '/deployed', 'w').close()
-    local file = fs.open(state_refresh.turtles_dir_path .. mining_turtle.id .. '/deployed', 'w')
+    fs.open(state.turtles_dir_path .. chunky_turtle.id .. '/deployed', 'w').close()
+    local file = fs.open(state.turtles_dir_path .. mining_turtle.id .. '/deployed', 'w')
     file.write(config.locations.mining_center.y + 2)  -- Start depth (surface)
     file.close()
     
@@ -250,13 +248,11 @@ end
 
 function solo_turtle_begin(turtle)
     -- Assigns blocks to solo turtles for mining
-    local state_refresh = API.getState()
-    local block = state_refresh.next_block
+    local block = state.next_block
     
     if not block then
         gen_next_block()
-        state_refresh = API.getState()
-        block = state_refresh.next_block
+        block = state.next_block
         if not block then
             add_task(turtle, {action = 'pass', end_state = 'idle'})
             return
@@ -270,8 +266,7 @@ function solo_turtle_begin(turtle)
     write_turtle_block(turtle, block)
     
     -- Mark as deployed (mining in progress)
-    state_refresh = API.getState()
-    local file = fs.open(state_refresh.turtles_dir_path .. turtle.id .. '/deployed', 'w')
+    local file = fs.open(state.turtles_dir_path .. turtle.id .. '/deployed', 'w')
     file.write(config.locations.mining_center.y + 2)  -- Start depth (surface)
     file.close()
     
@@ -354,10 +349,9 @@ end
 
 
 function check_pair_fuel(turtle)
-    local state_refresh = API.getState()
-    if state_refresh.min_fuel then
-        if (turtle.data.fuel_level ~= "unlimited" and turtle.data.fuel_level <= state_refresh.min_fuel) then
-            add_task(turtle, {action = 'prepare', data = {state_refresh.min_fuel}})
+    if state.min_fuel then
+        if (turtle.data.fuel_level ~= "unlimited" and turtle.data.fuel_level <= state.min_fuel) then
+            add_task(turtle, {action = 'prepare', data = {state.min_fuel}})
         else
             add_task(turtle, {action = 'pass', end_state = 'pair'})
         end
@@ -375,4 +369,19 @@ function send_turtle_up(turtle)
         end
     end
 end
+
+-- Expose functions as globals (os.loadAPI wraps them into API table)
+-- Assign to global environment explicitly
+_G.get_closest_unmined_block = get_closest_unmined_block
+_G.gen_next_block = gen_next_block
+_G.good_on_fuel = good_on_fuel
+_G.free_turtle = free_turtle
+_G.pair_turtles_finish = pair_turtles_finish
+_G.pair_turtles_begin = pair_turtles_begin
+_G.pair_turtles_send = pair_turtles_send
+_G.solo_turtle_begin = solo_turtle_begin
+_G.go_mine = go_mine
+_G.follow = follow
+_G.check_pair_fuel = check_pair_fuel
+_G.send_turtle_up = send_turtle_up
 

@@ -1,13 +1,9 @@
 -- SET LABEL
 os.setComputerLabel('Hub')
 
--- INITIALIZE APIS
--- Load all APIs through init_apis.lua (handles all API loading)
-loadfile('/init_apis.lua')()
-
--- Get references from API class
-local config = API.getConfig()
-local state = API.getState()
+os.loadAPI('/apis/utilities.lua')
+os.loadAPI('/apis/config.lua')
+os.loadAPI('/apis/state.lua')
 
 -- Calculate disk drive location dynamically (1 block below hub computer)
 -- Disk drive is always 1 block below the hub computer, not relative to hub_reference
@@ -30,6 +26,15 @@ else
 end
 
 
+-- OPEN REDNET
+for _, side in pairs({'back', 'top', 'left', 'right'}) do
+    if peripheral.getType(side) == 'modem' then
+        rednet.open(side)
+        break
+    end
+end
+
+
 -- IF UPDATED PRINT "UPDATED"
 if fs.exists('/updated') then
     fs.delete('/updated')
@@ -39,16 +44,13 @@ end
 
 
 -- LAUNCH PROGRAMS AS SEPARATE THREADS
--- Data thread must be launched first (handles all rednet communication)
-multishell.launch({}, '/data_thread.lua')
 multishell.launch({}, '/user_input.lua')
 multishell.launch({}, '/report.lua')
 multishell.launch({}, '/monitor.lua')
 multishell.launch({}, '/events.lua')
 multishell.launch({}, '/mine_manager.lua')
-multishell.setTitle(2, 'data_thread')
-multishell.setTitle(3, 'user')
-multishell.setTitle(4, 'report')
-multishell.setTitle(5, 'monitor')
-multishell.setTitle(6, 'events')
-multishell.setTitle(7, 'mine_manager')
+multishell.setTitle(2, 'user')
+multishell.setTitle(3, 'report')
+multishell.setTitle(4, 'monitor')
+multishell.setTitle(5, 'events')
+multishell.setTitle(6, 'mine_manager')

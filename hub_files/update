@@ -42,28 +42,25 @@ if not fs.exists(drive_path) then
 end
 
 -- Load GitHub API helper (if available)
-local github_api = nil
+local github_api_loaded = false
 local helper_paths = {
-    "/disk/hub_files/github_api.lua",
-    drive_path .. "/hub_files/github_api.lua",
-    "/hub_files/github_api.lua"
+    "/apis/github_api.lua",
+    "/disk/hub_files/apis/github_api.lua",
+    drive_path .. "/hub_files/apis/github_api.lua"
 }
 
 for _, path in ipairs(helper_paths) do
     if fs.exists(path) then
-        local helper_func = loadfile(path)
-        if helper_func then
-            github_api = helper_func()
+        if os.loadAPI(path) then
+            github_api_loaded = true
             break
         end
     end
 end
 
 -- If helper not found, define functions inline (fallback)
-if not github_api then
-    github_api = {}
-    
-    function github_api.parse_json_simple(json_str)
+if not github_api_loaded then
+    function parse_json_simple(json_str)
         local tree_array = string.match(json_str, '"tree"%s*:%s*%[%s*(.*)%s*%]')
         if not tree_array then return nil end
         local filtered = {}
@@ -78,7 +75,7 @@ if not github_api then
         return filtered
     end
     
-    function github_api.get_latest_release_tag(github_repo)
+    function get_latest_release_tag(github_repo)
         -- Get the latest release tag from GitHub releases API
         local api_url = "https://api.github.com/repos/" .. github_repo .. "/releases/latest"
         local response = http.get(api_url, {["Accept"] = "application/vnd.github.v3+json"})
@@ -102,7 +99,7 @@ if not github_api then
         return tag_name
     end
     
-    function github_api.get_file_tree(github_repo, github_branch)
+    function get_file_tree(github_repo, github_branch)
         local api_url = "https://api.github.com/repos/" .. github_repo .. "/git/trees/" .. github_branch .. "?recursive=1"
         local response = http.get(api_url, {["Accept"] = "application/vnd.github.v3+json"})
         if not response then return nil end
@@ -114,7 +111,7 @@ if not github_api then
         if textutils and textutils.unserializeJSON then
             json_data = textutils.unserializeJSON(content)
         else
-            local file_paths = github_api.parse_json_simple(content)
+            local file_paths = parse_json_simple(content)
             if file_paths then
                 json_data = {tree = {}}
                 for _, path in ipairs(file_paths) do
@@ -137,7 +134,7 @@ if dev_mode then
 else
     -- Normal mode: Use latest release tag (version locked)
     print("Checking for latest release...")
-    latest_tag = github_api.get_latest_release_tag(GITHUB_REPO)
+    latest_tag = get_latest_release_tag(GITHUB_REPO)
     if latest_tag then
         -- Remove 'v' prefix if present (e.g., "v0.1.0" -> "0.1.0")
         local tag_for_url = string.gsub(latest_tag, "^v", "")
@@ -155,7 +152,7 @@ end
 local function get_hub_files()
     -- Use latest tag if available, otherwise fallback to main branch
     local ref_to_use = latest_tag or GITHUB_BRANCH
-    local tree = github_api.get_file_tree(GITHUB_REPO, ref_to_use)
+    local tree = get_file_tree(GITHUB_REPO, ref_to_use)
     
     if not tree then
         error("Failed to retrieve file list from GitHub API. Please check your internet connection and try again.")
@@ -194,7 +191,7 @@ local hub_files = get_hub_files()
 -- Function to get shared files
 local function get_shared_files()
     local ref_to_use = latest_tag or GITHUB_BRANCH
-    local tree = github_api.get_file_tree(GITHUB_REPO, ref_to_use)
+    local tree = get_file_tree(GITHUB_REPO, ref_to_use)
     
     if not tree then
         return {}

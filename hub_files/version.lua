@@ -5,6 +5,6 @@
 return {
     major = 0,
     minor = 2,
-    hotfix = 1
+    hotfix = 2
 }
 
