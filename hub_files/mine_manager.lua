@@ -549,6 +549,100 @@ function initialize_turtle(turtle)
 end
 
 
+function get_hub_version()
+    -- Load version from version.lua file
+    local version_paths = {
+        "/version.lua",
+        "/disk/hub_files/version.lua"
+    }
+    
+    for _, path in ipairs(version_paths) do
+        if fs.exists(path) then
+            local version_file = fs.open(path, "r")
+            if version_file then
+                local version_code = version_file.readAll()
+                version_file.close()
+                local version_func = load(version_code)
+                if version_func then
+                    local success, version = pcall(version_func)
+                    if success and version and type(version) == "table" then
+                        return version
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+
+function compare_versions(v1, v2)
+    -- Compare two semantic versions
+    -- Returns: -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
+    if not v1 or not v2 or type(v1) ~= "table" or type(v2) ~= "table" then
+        return nil
+    end
+    
+    -- Compare major
+    if v1.major > v2.major then return 1 end
+    if v1.major < v2.major then return -1 end
+    
+    -- Compare minor
+    if v1.minor > v2.minor then return 1 end
+    if v1.minor < v2.minor then return -1 end
+    
+    -- Compare hotfix
+    if v1.hotfix > v2.hotfix then return 1 end
+    if v1.hotfix < v2.hotfix then return -1 end
+    
+    return 0  -- Equal
+end
+
+
+function check_turtle_versions()
+    -- Check if any turtles are out of date and queue them for update
+    local hub_version = get_hub_version()
+    if not hub_version then
+        -- Can't check versions if hub version not available
+        return
+    end
+    
+    local out_of_date_turtles = {}
+    
+    for _, turtle in pairs(state.turtles) do
+        if turtle.data and turtle.data.version then
+            local turtle_version = turtle.data.version
+            local comparison = compare_versions(turtle_version, hub_version)
+            
+            -- If turtle version is older than hub version, queue for update
+            if comparison and comparison < 0 then
+                -- Check if turtle is already queued for update
+                local already_queued = false
+                if state.update_queue then
+                    for _, queued_id in ipairs(state.update_queue) do
+                        if queued_id == turtle.id then
+                            already_queued = true
+                            break
+                        end
+                    end
+                end
+                
+                -- Check if turtle is currently updating
+                if not already_queued and not turtle.update_pending and not turtle.update_complete then
+                    table.insert(out_of_date_turtles, turtle)
+                end
+            end
+        end
+    end
+    
+    -- Queue out-of-date turtles for update
+    if #out_of_date_turtles > 0 then
+        print('Found ' .. #out_of_date_turtles .. ' out-of-date turtle(s). Queuing for update...')
+        queue_turtles_for_update(out_of_date_turtles, false)
+    end
+end
+
+
 function add_task(turtle, task)
     if not task.data then
         task.data = {}
@@ -557,13 +651,18 @@ function add_task(turtle, task)
 end
 
 
-function queue_turtles_for_update(turtle_list, update_hub_after)
+function queue_turtles_for_update(turtle_list, update_hub_after, force_update)
     -- Queue turtles for update: send home, then to disk, then update one at a time
+    -- force_update: If true, updates turtles even if versions match
     if #turtle_list == 0 then
         if update_hub_after then
             print('All turtles updated. Updating hub...')
             sleep(1)
-            os.run({}, '/update')
+            if force_update then
+                os.run({}, '/update', 'force')
+            else
+                os.run({}, '/update')
+            end
         end
         return
     end
@@ -573,6 +672,7 @@ function queue_turtles_for_update(turtle_list, update_hub_after)
         state.update_queue = {}
         state.update_in_progress = false
         state.update_hub_after = false
+        state.force_update = false
     end
     
     -- Add turtles to queue
@@ -580,10 +680,15 @@ function queue_turtles_for_update(turtle_list, update_hub_after)
         turtle.tasks = {}
         turtle.update_pending = true
         turtle.update_complete = false
+        -- Mark turtle for force update if requested
+        if force_update then
+            turtle.force_update = true
+        end
         table.insert(state.update_queue, turtle.id)
     end
     
     state.update_hub_after = update_hub_after
+    state.force_update = force_update or false
     
     -- Start processing queue
     process_update_queue()
@@ -597,8 +702,13 @@ function process_update_queue()
         if #state.update_queue == 0 and state.update_hub_after then
             print('All turtles updated. Updating hub...')
             sleep(1)
-            os.run({}, '/update')
+            if state.force_update then
+                os.run({}, '/update', 'force')
+            else
+                os.run({}, '/update')
+            end
             state.update_hub_after = false
+            state.force_update = false
         end
         return
     end
@@ -805,22 +915,31 @@ function user_input(input)
             end
         elseif command == 'update' then
             -- UPDATE TURTLES AND/OR HUB
+            -- Check for "force" argument
+            local next_arg = next_word()
+            local force_update = (next_arg == 'force')
+            local update_hub_after = not turtle_id_string
+            
             if turtle_id_string then
                 -- Update specific turtle(s) - queue them one at a time
                 local turtle_list = {}
                 for _, turtle in pairs(turtles) do
                     table.insert(turtle_list, turtle)
                 end
-                queue_turtles_for_update(turtle_list, false)
+                queue_turtles_for_update(turtle_list, false, force_update)
             else
                 -- Update hub and all turtles
-                print('Updating hub and all turtles...')
+                if force_update then
+                    print('Force updating hub and all turtles (ignoring version checks)...')
+                else
+                    print('Updating hub and all turtles...')
+                end
                 -- Queue all turtles for update
                 local turtle_list = {}
                 for _, turtle in pairs(state.turtles) do
                     table.insert(turtle_list, turtle)
                 end
-                queue_turtles_for_update(turtle_list, true)
+                queue_turtles_for_update(turtle_list, true, force_update)
             end
         elseif command == 'return' then
             -- BRING TURTLE HOME
@@ -877,6 +996,11 @@ function command_turtles()
     -- Process update queue if active
     if state.update_queue and #state.update_queue > 0 then
         process_update_queue()
+    end
+    
+    -- Check for out-of-date turtles (only if not already processing updates)
+    if not state.update_in_progress then
+        check_turtle_versions()
     end
     
     local turtles_for_pair = {}

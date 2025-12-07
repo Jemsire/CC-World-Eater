@@ -1,17 +1,26 @@
 -- WORLD EATER: Hub Update Script
 -- Downloads files from GitHub and updates the hub system
--- Usage: update [force-config]
+-- Usage: update [force] [force-config]
+--   force: If provided, will update even if versions match
 --   force-config: If provided, will also update config files
 
 local GITHUB_REPO = "Jemsire/CC-World-Eater"
 local GITHUB_BRANCH = "main"
 local GITHUB_BASE = "https://raw.githubusercontent.com/" .. GITHUB_REPO .. "/" .. GITHUB_BRANCH
 
--- Check for force-config argument
+-- Check for force and force-config arguments
+local force_update = false
 local force_config = false
-if arg and arg[1] == "force-config" then
-    force_config = true
-    print("Force update mode: Config files will be updated")
+if arg then
+    for _, arg_val in ipairs(arg) do
+        if arg_val == "force" then
+            force_update = true
+            print("Force update mode: Will update even if versions match")
+        elseif arg_val == "force-config" then
+            force_config = true
+            print("Force update mode: Config files will be updated")
+        end
+    end
 end
 
 -- Files to exclude from update (unless force-config is set)
@@ -229,9 +238,14 @@ print("")
 if local_version then
     local comparison = compare_versions(local_version, remote_version)
     if comparison and comparison >= 0 then
-        print("Already up-to-date! No update needed.")
-        print("(Use 'update force-config' to force update)")
-        return
+        if force_update then
+            print("Force update mode: Updating despite matching versions...")
+            print("")
+        else
+            print("Already up-to-date! No update needed.")
+            print("(Use 'update force' to force update, or 'update force-config' to update config files)")
+            return
+        end
     end
     
     -- Check if this is a major version update
