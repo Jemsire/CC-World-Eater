@@ -13,6 +13,20 @@ os.loadAPI('/apis/config')
 os.loadAPI('/apis/state')
 os.loadAPI('/apis/basics')
 
+-- Copy and load mine manager modules
+fs.copy('/block_management.lua', '/apis/block_management')
+fs.copy('/turtle_assignment.lua', '/apis/turtle_assignment')
+fs.copy('/version_management.lua', '/apis/version_management')
+fs.copy('/task_management.lua', '/apis/task_management')
+fs.copy('/user_commands.lua', '/apis/user_commands')
+fs.copy('/state_machine.lua', '/apis/state_machine')
+os.loadAPI('/apis/block_management')
+os.loadAPI('/apis/turtle_assignment')
+os.loadAPI('/apis/version_management')
+os.loadAPI('/apis/task_management')
+os.loadAPI('/apis/user_commands')
+os.loadAPI('/apis/state_machine')
+
 -- Calculate disk drive location dynamically (1 block below hub computer)
 -- Disk drive is always 1 block below the hub computer, not relative to hub_reference
 if gps then

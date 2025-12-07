@@ -3,13 +3,8 @@
 -- Loads modules and provides action interface
 -- ============================================
 
--- Load modules
-os.loadAPI('/movement')
-os.loadAPI('/navigation')
-os.loadAPI('/detection')
-os.loadAPI('/item_management')
-os.loadAPI('/mining')
-os.loadAPI('/turtle_utilities')
+-- Modules are loaded by startup.lua into /apis/
+-- They are already available as global functions
 
 -- Actions table for turtle_main.lua
 actions = {

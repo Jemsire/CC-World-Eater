@@ -9,10 +9,26 @@ fs.makeDir('/apis')
 fs.copy('/config.lua', '/apis/config')
 fs.copy('/state.lua', '/apis/state')
 fs.copy('/utilities.lua', '/apis/basics')
-fs.copy('/actions.lua', '/apis/actions')
 os.loadAPI('/apis/config')
 os.loadAPI('/apis/state')
 os.loadAPI('/apis/basics')
+
+-- Copy and load turtle action modules
+fs.copy('/movement.lua', '/apis/movement')
+fs.copy('/navigation.lua', '/apis/navigation')
+fs.copy('/detection.lua', '/apis/detection')
+fs.copy('/item_management.lua', '/apis/item_management')
+fs.copy('/mining.lua', '/apis/mining')
+fs.copy('/turtle_utilities.lua', '/apis/turtle_utilities')
+os.loadAPI('/apis/movement')
+os.loadAPI('/apis/navigation')
+os.loadAPI('/apis/detection')
+os.loadAPI('/apis/item_management')
+os.loadAPI('/apis/mining')
+os.loadAPI('/apis/turtle_utilities')
+
+-- Load actions.lua (which provides the actions table)
+fs.copy('/actions.lua', '/apis/actions')
 os.loadAPI('/apis/actions')
 
 
