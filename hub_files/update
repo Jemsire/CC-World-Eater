@@ -522,7 +522,7 @@ if updated_count > 0 and error_count == 0 and remote_version then
         version_file.close()
         local version_str = format_version(new_version)
         if dev_mode then
-            print(string.format("  Version updated to: %s-DEV (dev mode)", version_str))
+            print(string.format("  Version updated to: %s (dev mode)", version_str))
         else
             print(string.format("  Version updated to: %s", version_str))
         end

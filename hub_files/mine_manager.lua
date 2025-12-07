@@ -1060,35 +1060,6 @@ function command_turtles()
             if turtle.update_complete and turtle.data and turtle.data.version then
                 verify_turtle_version_after_update(turtle)
             end
-            
-            -- After initialization completes (session_id matches), check if turtle needs update
-            -- This ensures turtles are checked for updates right after they finish initializing
-            -- We check this explicitly here because check_turtle_versions() runs at the start of command_turtles()
-            -- and might miss turtles that just finished initializing
-            if turtle.data.session_id == session_id and turtle.state ~= 'updating' and turtle.state ~= 'halt' and not turtle.update_complete then
-                local hub_version = get_hub_version()
-                if hub_version then
-                    local needs_update = false
-                    
-                    if not turtle.data.version then
-                        -- No version data means turtle is out of date
-                        needs_update = true
-                    else
-                        local turtle_version = turtle.data.version
-                        local comparison = compare_versions(turtle_version, hub_version)
-                        if comparison and comparison < 0 then
-                            needs_update = true
-                        end
-                    end
-                    
-                    if needs_update then
-                        print('Turtle ' .. turtle.id .. ' is out of date after initialization. Setting to updating state...')
-                        free_turtle(turtle)
-                        turtle.tasks = {}
-                        add_task(turtle, {action = 'pass', end_state = 'updating'})
-                    end
-                end
-            end
 
             if #turtle.tasks > 0 then
                 -- TURTLE IS BUSY
