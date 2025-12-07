@@ -17,11 +17,20 @@ for _, filename in pairs(fs.list('/')) do
     end
 end
 
--- Copy all files from turtle_files
+-- Copy all files from turtle_files (except version.lua - it's downloaded from hub during updates)
 for _, filename in pairs(fs.list(turtle_files_path)) do
-    if filename ~= 'apis' then
+    if filename ~= 'apis' and filename ~= 'version.lua' then
         fs.copy(turtle_files_path .. '/' .. filename, '/' .. filename)
     end
+end
+
+-- Copy version.lua from hub_files if it exists (downloaded during update)
+if fs.exists(turtle_files_path .. '/../hub_files/version.lua') then
+    fs.copy(turtle_files_path .. '/../hub_files/version.lua', '/version.lua')
+    print("Copied version.lua from hub")
+elseif fs.exists('/disk/hub_files/version.lua') then
+    fs.copy('/disk/hub_files/version.lua', '/version.lua')
+    print("Copied version.lua from hub")
 end
 
 -- Copy apis folder

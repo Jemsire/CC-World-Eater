@@ -63,24 +63,29 @@ if not fs.exists(disk_turtle_path) then
     return
 end
 
--- Get all files from disk/turtle_files
+-- Get all files from disk/turtle_files (excluding version.lua - downloaded from hub)
 local function get_files_from_disk(dir_path, base_path)
     base_path = base_path or ""
     local files = {}
     
     for _, filename in pairs(fs.list(dir_path)) do
-        local full_path = fs.combine(dir_path, filename)
-        local relative_path = base_path == "" and filename or (base_path .. "/" .. filename)
-        
-        if fs.isDir(full_path) then
-            -- Recursively get files from subdirectory
-            local sub_files = get_files_from_disk(full_path, relative_path)
-            for _, sub_file in ipairs(sub_files) do
-                table.insert(files, sub_file)
-            end
+        -- Skip version.lua - it's downloaded from hub_files during updates
+        if filename == "version.lua" then
+            -- Skip this file
         else
-            -- Add file to list
-            table.insert(files, "turtle_files/" .. relative_path)
+            local full_path = fs.combine(dir_path, filename)
+            local relative_path = base_path == "" and filename or (base_path .. "/" .. filename)
+            
+            if fs.isDir(full_path) then
+                -- Recursively get files from subdirectory
+                local sub_files = get_files_from_disk(full_path, relative_path)
+                for _, sub_file in ipairs(sub_files) do
+                    table.insert(files, sub_file)
+                end
+            else
+                -- Add file to list
+                table.insert(files, "turtle_files/" .. relative_path)
+            end
         end
     end
     
@@ -147,6 +152,34 @@ for _, filepath in ipairs(turtle_files) do
             error_count = error_count + 1
         end
     end
+end
+
+-- Download version.lua from hub (always get latest version from hub)
+print("")
+print("Downloading version.lua from hub...")
+local hub_version_path = drive_path .. "/hub_files/version.lua"
+local turtle_version_path = update_to_root and "/version.lua" or (drive_path .. "/turtle_files/version.lua")
+
+if fs.exists(hub_version_path) then
+    -- Copy hub version to turtle
+    local success, err = pcall(function()
+        if update_to_root then
+            fs.copy(hub_version_path, turtle_version_path)
+        else
+            -- Copy to disk first, will be copied to root by turtle.lua
+            fs.copy(hub_version_path, turtle_version_path)
+        end
+    end)
+    
+    if success then
+        print("  ✓ Downloaded version.lua from hub")
+        updated_count = updated_count + 1
+    else
+        print("  ✗ Failed to download version.lua: " .. (err or "unknown error"))
+        error_count = error_count + 1
+    end
+else
+    print("  ⚠ Hub version.lua not found on disk (using existing turtle version if available)")
 end
 
 print("")
