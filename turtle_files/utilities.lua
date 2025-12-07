@@ -58,6 +58,9 @@ end
 
 
 function in_area(xyz, area)
+    if not area or not xyz then
+        return false
+    end
     return xyz.x <= area.max_x and xyz.x >= area.min_x and xyz.y <= area.max_y and xyz.y >= area.min_y and xyz.z <= area.max_z and xyz.z >= area.min_z
 end
 

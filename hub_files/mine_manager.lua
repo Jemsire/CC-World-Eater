@@ -810,7 +810,7 @@ function process_update_queue()
     local is_home = false
     local is_at_disk = false
     if turtle.data and turtle.data.location then
-        is_home = basics.in_area(turtle.data.location, config.locations.home_area) or
+        is_home = (config.locations.home_area and basics.in_area(turtle.data.location, config.locations.home_area)) or
                   basics.in_area(turtle.data.location, config.locations.greater_home_area)
         is_at_disk = basics.in_location(turtle.data.location, config.locations.disk_drive)
     end
