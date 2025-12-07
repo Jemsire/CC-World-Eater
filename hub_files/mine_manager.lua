@@ -670,9 +670,9 @@ function check_turtle_versions()
                     -- Free turtle from any block assignment
                     free_turtle(turtle)
                     -- Clear tasks and set to updating state IMMEDIATELY to prevent duplicate checks
+                    -- No need for 'pass' task - the update flow in command_turtles() will handle navigation
                     turtle.tasks = {}
                     turtle.state = 'updating'
-                    add_task(turtle, {action = 'pass', end_state = 'updating'})
                 end
             end
         end
@@ -721,10 +721,10 @@ function queue_turtles_for_update(turtle_list, update_hub_after, force_update)
             -- Free turtle from any block assignment
             free_turtle(turtle)
             -- Clear tasks and set to updating state IMMEDIATELY to prevent duplicate checks
+            -- No need for 'pass' task - the update flow in command_turtles() will handle navigation
             turtle.tasks = {}
             turtle.state = 'updating'
             turtle.force_update = force_update or false
-            add_task(turtle, {action = 'pass', end_state = 'updating'})
             print('Set turtle ' .. turtle.id .. ' to updating state')
         end
     end
@@ -839,7 +839,11 @@ function send_tasks(turtle)
                     if turtle.state == 'halt' and task.end_state ~= 'halt' then
                         unhalt(turtle)
                     end
-                    turtle.state = task.end_state
+                    -- Protect 'updating' state - don't allow tasks to overwrite it
+                    -- The update flow manages state transitions for updating turtles
+                    if turtle.state ~= 'updating' or task.end_state == 'updating' then
+                        turtle.state = task.end_state
+                    end
                 end
                 if task.end_function then
                     if task.end_function_args then

@@ -98,6 +98,6 @@ while true do
             version          = turtle_version,
         }, 'turtle_report')
     
-    sleep(0.5)
+    sleep(1)  -- Reduced from 0.5s to 1s - still frequent enough for timeout detection (5s timeout)
     
 end
