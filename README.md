@@ -36,8 +36,10 @@ Monitors are 4 long by 3 tall (4x3)
 1. Build the setup
 2. Open the main hub computer
 3. Download the installer by running: `wget https://raw.githubusercontent.com/Jemsire/CC-World-Eater/main/install.lua install.lua`
-4. Type `install.lua` and hit enter to run
+4. Type `install.lua` and hit enter to run (installs latest stable release by default)
 5. Follow the installation prompts to set up your World Eater system
+
+**Note:** The installer automatically checks for the latest release version and installs that version. This ensures you get a stable, tested release.
 
 ### Installation via Pastebin
 
@@ -45,8 +47,36 @@ Monitors are 4 long by 3 tall (4x3)
 2. Open the main hub computer
 3. Upload the install.lua as a [pastebin](https://pastebin.com/) and copy your code/ID(recommend 10 minute deletion time)
 3. Run `pastebin get <PASTEBIN_ID> install.lua`
-4. Type `install.lua` and hit enter to run
+4. Type `install.lua` and hit enter to run (installs latest stable release by default)
 5. Follow the installation prompts to set up your World Eater system
+
+### Dev Mode Installation (⚠️ Unsupported)
+
+**⚠️ WARNING: Dev mode installs are UNSUPPORTED and may have breaking changes!**
+
+If you want to install the latest commits from the main branch (dev mode) instead of the latest stable release:
+
+```bash
+install.lua dev
+```
+
+**Important Notes:**
+- Dev mode installs the latest commits from the `main` branch, which may include untested or incomplete features
+- **No support will be provided for dev installs** - use at your own risk
+- Dev installs may have breaking changes that require manual fixes
+- Configuration files may be incompatible between dev versions
+- Always backup your configuration before installing dev updates
+- If you encounter issues with a dev install, you must revert to a stable release to receive support
+
+**When to use dev mode:**
+- You are a developer contributing to the project
+- You want to test the latest features before they are released
+- You understand the risks and are comfortable troubleshooting issues yourself
+
+**When NOT to use dev mode:**
+- You want a stable, production-ready installation
+- You need support for issues
+- You are not comfortable troubleshooting breaking changes
 
 
 ## 📋 Features
@@ -187,7 +217,7 @@ From the hub computer, simply type:
 update
 ```
 
-This will update both the hub computer and all connected turtles automatically. The update system will:
+This will update both the hub computer and all connected turtles automatically to the latest stable release. The update system will:
 1. Queue all turtles for update
 2. Send each turtle home (if not already there)
 3. Have turtles navigate to the disk drive one at a time
@@ -205,6 +235,34 @@ To also update config files (not recommended unless you want to reset your setti
 ```lua
 disk/hub_files/update force-config
 ```
+
+### Dev Mode Updates (⚠️ Unsupported)
+
+**⚠️ WARNING: Dev mode updates are UNSUPPORTED and may have breaking changes!**
+
+To update to the latest commits from the main branch (dev mode) instead of the latest stable release:
+
+```lua
+disk/hub_files/update dev
+```
+
+**Important Notes:**
+- Dev mode updates install the latest commits from the `main` branch, which may include untested or incomplete features
+- **No support will be provided for dev updates** - use at your own risk
+- Dev updates may have breaking changes that require manual fixes
+- Configuration files may be incompatible between dev versions
+- Always backup your configuration before updating to dev
+- If you encounter issues with a dev update, you must revert to a stable release to receive support
+
+**When to use dev mode:**
+- You are a developer contributing to the project
+- You want to test the latest features before they are released
+- You understand the risks and are comfortable troubleshooting issues yourself
+
+**When NOT to use dev mode:**
+- You want a stable, production-ready system
+- You need support for issues
+- You are not comfortable troubleshooting breaking changes
 
 ### Turtle Update
 

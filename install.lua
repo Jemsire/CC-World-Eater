@@ -1,11 +1,25 @@
 -- Bootstrap Installer for World Eater
 -- Small installer that downloads everything from GitHub
 -- Place this in pastebin, users run: pastebin get <CODE> install.lua
+-- Usage: install.lua [dev]
+--   dev: If provided, will use latest commits from main branch (dev mode)
+--        WARNING: Dev mode installs may have breaking changes and are unsupported
 
 -- Configuration
 local GITHUB_REPO = "Jemsire/CC-World-Eater"
 local GITHUB_BRANCH = "main"  -- or "master"
-local GITHUB_BASE = "https://raw.githubusercontent.com/" .. GITHUB_REPO .. "/" .. GITHUB_BRANCH
+local GITHUB_BASE = nil  -- Will be set after checking for latest release or dev mode
+local latest_tag = nil  -- Latest release tag (set in main function)
+
+-- Check for dev argument
+local dev_mode = false
+if arg then
+    for _, arg_val in ipairs(arg) do
+        if arg_val == "dev" then
+            dev_mode = true
+        end
+    end
+end
 
 -- Drive assignment
 local DRIVE_PATH = "/disk"  -- All files go on single drive
@@ -150,11 +164,38 @@ local function parse_json_simple(json_str)
     return filtered
 end
 
+-- Get latest release tag from GitHub
+local function get_latest_release_tag()
+    local api_url = "https://api.github.com/repos/" .. GITHUB_REPO .. "/releases/latest"
+    local response = http.get(api_url, {["Accept"] = "application/vnd.github.v3+json"})
+    if not response then return nil end
+    
+    local content = response.readAll()
+    response.close()
+    
+    -- Try to parse JSON
+    local tag_name = nil
+    if textutils and textutils.unserializeJSON then
+        local json_data = textutils.unserializeJSON(content)
+        if json_data and json_data.tag_name then
+            tag_name = json_data.tag_name
+        end
+    else
+        -- Simple regex fallback
+        tag_name = string.match(content, '"tag_name"%s*:%s*"([^"]+)"')
+    end
+    
+    return tag_name
+end
+
 -- Download file list from GitHub using API (dynamic discovery)
 local function download_file_list()
+    -- Determine which ref to use (tag or branch)
+    local ref_to_use = dev_mode and GITHUB_BRANCH or (latest_tag or GITHUB_BRANCH)
+    
     -- Use GitHub Trees API to get recursive file listing
-    -- Format: https://api.github.com/repos/OWNER/REPO/git/trees/BRANCH?recursive=1
-    local api_url = "https://api.github.com/repos/" .. GITHUB_REPO .. "/git/trees/" .. GITHUB_BRANCH .. "?recursive=1"
+    -- Format: https://api.github.com/repos/OWNER/REPO/git/trees/REF?recursive=1
+    local api_url = "https://api.github.com/repos/" .. GITHUB_REPO .. "/git/trees/" .. ref_to_use .. "?recursive=1"
     
     local response = http.get(api_url, {
         ["Accept"] = "application/vnd.github.v3+json"
@@ -494,6 +535,37 @@ end
 local function main()
     printHeader("World Eater Installer")
     
+    -- Check for HTTP API
+    if not http then
+        error("HTTP API not available! This installer requires internet access.")
+    end
+    
+    -- Determine which version to install
+    latest_tag = nil
+    if dev_mode then
+        -- Dev mode: Use main branch directly (latest commits)
+        GITHUB_BASE = "https://raw.githubusercontent.com/" .. GITHUB_REPO .. "/" .. GITHUB_BRANCH
+        print("⚠ DEV MODE: Installing latest commits from " .. GITHUB_BRANCH .. " branch")
+        print("⚠ WARNING: Dev installs may have breaking changes and are UNSUPPORTED")
+        print("⚠ Use at your own risk - no support will be provided for dev installs")
+        print("")
+    else
+        -- Normal mode: Check for latest release tag (version locked)
+        print("Checking for latest release...")
+        latest_tag = get_latest_release_tag()
+        if latest_tag then
+            -- Remove 'v' prefix if present (e.g., "v0.1.0" -> "0.1.0")
+            local tag_for_url = string.gsub(latest_tag, "^v", "")
+            GITHUB_BASE = "https://raw.githubusercontent.com/" .. GITHUB_REPO .. "/" .. latest_tag
+            print("Using latest release: " .. latest_tag)
+        else
+            -- Fallback to main branch if no releases found
+            GITHUB_BASE = "https://raw.githubusercontent.com/" .. GITHUB_REPO .. "/" .. GITHUB_BRANCH
+            print("No releases found, using " .. GITHUB_BRANCH .. " branch")
+        end
+        print("")
+    end
+    
     -- Detect system
     local system_type = detect_system_type()
     print("Detected system type: " .. system_type)
@@ -501,11 +573,7 @@ local function main()
     -- Check for disk drive
     local drive_path = check_drive()
     print("Disk drive: /disk")
-    
-    -- Check for HTTP API
-    if not http then
-        error("HTTP API not available! This installer requires internet access.")
-    end
+    print("")
     
     -- Download and install
     install_files(system_type, drive_path)
