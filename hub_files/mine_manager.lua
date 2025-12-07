@@ -6,40 +6,13 @@
 inf = basics.inf
 str_xyz = basics.str_xyz
 
--- Load modules using require()
--- Implement require() if not available (for CC:Tweaked compatibility)
-if not require then
-    local loaded = {}
-    require = function(name)
-        if loaded[name] then
-            return loaded[name]
-        end
-        local paths = {
-            '/apis/' .. name .. '.lua',
-            '/apis/' .. name,
-            '/' .. name .. '.lua',
-            '/' .. name
-        }
-        for _, path in ipairs(paths) do
-            if fs.exists(path) then
-                local func = loadfile(path)
-                if func then
-                    local result = func()
-                    loaded[name] = result or true
-                    return loaded[name]
-                end
-            end
-        end
-        error('module "' .. name .. '" not found')
-    end
-end
-
-require('block_management')
-require('turtle_assignment')
-require('version_management')
-require('task_management')
-require('user_commands')
-require('state_machine')
+-- Load modules using require() (CC:Tweaked built-in)
+require('/apis/block_management')
+require('/apis/turtle_assignment')
+require('/apis/version_management')
+require('/apis/task_management')
+require('/apis/user_commands')
+require('/apis/state_machine')
 
 function main()
     -- INCREASE SESSION ID BY ONE

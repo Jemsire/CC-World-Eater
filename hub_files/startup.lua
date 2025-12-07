@@ -2,38 +2,7 @@
 os.setComputerLabel('Hub')
 
 -- INITIALIZE APIS
--- Implement require() if not available (for CC:Tweaked compatibility)
-if not require then
-    local loaded = {}
-    require = function(name)
-        -- Check if already loaded
-        if loaded[name] then
-            return loaded[name]
-        end
-        
-        -- Try multiple paths
-        local paths = {
-            '/apis/' .. name .. '.lua',
-            '/apis/' .. name,
-            '/' .. name .. '.lua',
-            '/' .. name
-        }
-        
-        for _, path in ipairs(paths) do
-            if fs.exists(path) then
-                local func = loadfile(path)
-                if func then
-                    local result = func()
-                    loaded[name] = result or true  -- Store result or true if nil
-                    return loaded[name]
-                end
-            end
-        end
-        
-        error('module "' .. name .. '" not found')
-    end
-end
-
+-- Use require() instead of deprecated os.loadAPI()
 if fs.exists('/apis') then
     fs.delete('/apis')
 end
@@ -41,9 +10,9 @@ fs.makeDir('/apis')
 fs.copy('/config.lua', '/apis/config')
 fs.copy('/state.lua', '/apis/state')
 fs.copy('/utilities.lua', '/apis/basics')
-require('config')
-require('state')
-require('basics')
+require('/apis/config')
+require('/apis/state')
+require('/apis/basics')
 
 -- Copy and load mine manager modules
 fs.copy('/block_management.lua', '/apis/block_management')
@@ -52,12 +21,12 @@ fs.copy('/version_management.lua', '/apis/version_management')
 fs.copy('/task_management.lua', '/apis/task_management')
 fs.copy('/user_commands.lua', '/apis/user_commands')
 fs.copy('/state_machine.lua', '/apis/state_machine')
-require('block_management')
-require('turtle_assignment')
-require('version_management')
-require('task_management')
-require('user_commands')
-require('state_machine')
+require('/apis/block_management')
+require('/apis/turtle_assignment')
+require('/apis/version_management')
+require('/apis/task_management')
+require('/apis/user_commands')
+require('/apis/state_machine')
 
 -- Calculate disk drive location dynamically (1 block below hub computer)
 -- Disk drive is always 1 block below the hub computer, not relative to hub_reference

@@ -1,32 +1,5 @@
 -- Load modules needed by events.lua
--- Implement require() if not available (for CC:Tweaked compatibility)
-if not require then
-    local loaded = {}
-    require = function(name)
-        if loaded[name] then
-            return loaded[name]
-        end
-        local paths = {
-            '/apis/' .. name .. '.lua',
-            '/apis/' .. name,
-            '/' .. name .. '.lua',
-            '/' .. name
-        }
-        for _, path in ipairs(paths) do
-            if fs.exists(path) then
-                local func = loadfile(path)
-                if func then
-                    local result = func()
-                    loaded[name] = result or true
-                    return loaded[name]
-                end
-            end
-        end
-        error('module "' .. name .. '" not found')
-    end
-end
-
-require('version_management')
+require('/apis/version_management')
 
 while true do
     event = {os.pullEvent()}
