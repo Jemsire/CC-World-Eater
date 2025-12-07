@@ -3,6 +3,10 @@
 -- Handles tracking of mined blocks
 -- ============================================
 
+-- Get API references
+local config = API.getConfig()
+local state = API.getState()
+
 function load_mine()
     -- LOAD MINE INTO state.mine FROM /mine/<x,z>/ DIRECTORY
     -- Loads mined blocks
@@ -135,6 +139,7 @@ function update_block(turtle)
     local block = turtle.block
     if block then
         -- Check if turtle reached bedrock level
+        local config = API.getConfig()
         if turtle.data.location and turtle.data.location.y <= config.bedrock_level then
             mark_block_mined(block.x, block.z)
         end

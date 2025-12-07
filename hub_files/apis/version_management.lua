@@ -3,6 +3,11 @@
 -- Handles version checking and update coordination
 -- ============================================
 
+-- Get API references
+local config = API.getConfig()
+local state = API.getState()
+local utilities = API.getUtilities()
+
 function get_hub_version()
     -- Load version from version.lua file
     local version_paths = {

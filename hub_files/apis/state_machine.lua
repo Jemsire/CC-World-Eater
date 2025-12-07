@@ -3,6 +3,11 @@
 -- Handles turtle state transitions and command logic
 -- ============================================
 
+-- Get API references
+local config = API.getConfig()
+local state = API.getState()
+local utilities = API.getUtilities()
+
 function command_turtles()
     -- Check for out-of-date turtles and set them to updating state
     check_turtle_versions()

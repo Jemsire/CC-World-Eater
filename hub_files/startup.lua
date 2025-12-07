@@ -5,6 +5,10 @@ os.setComputerLabel('Hub')
 -- Load all APIs through init_apis.lua (handles all API loading)
 loadfile('/init_apis.lua')()
 
+-- Get references from API class
+local config = API.getConfig()
+local state = API.getState()
+
 -- Calculate disk drive location dynamically (1 block below hub computer)
 -- Disk drive is always 1 block below the hub computer, not relative to hub_reference
 if gps then

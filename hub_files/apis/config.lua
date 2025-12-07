@@ -448,8 +448,8 @@ default_monitor_zoom_level = 0
 --     probably want the mine center
 default_monitor_location = {x = c.x, z = c.z}
 
--- Create config table to reference all globals (for compatibility with code that uses config.*)
-config = {
+-- Return config table (no global creation)
+return {
     locations = locations,
     use_chunky_turtles = use_chunky_turtles,
     fuel_padding = fuel_padding,

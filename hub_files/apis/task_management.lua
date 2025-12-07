@@ -3,6 +3,10 @@
 -- Handles task queueing and sending
 -- ============================================
 
+-- Get API references
+local config = API.getConfig()
+local state = API.getState()
+
 function add_task(turtle, task)
     if not task.data then
         task.data = {}

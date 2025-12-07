@@ -6,6 +6,11 @@
 -- Load all APIs through init_apis.lua (handles all API loading)
 loadfile('/init_apis.lua')()
 
+-- Get references from API class
+local state = API.getState()
+local utilities = API.getUtilities()
+
+-- Create convenience variables
 inf = utilities.inf
 str_xyz = utilities.str_xyz
 

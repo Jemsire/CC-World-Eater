@@ -3,11 +3,16 @@
 -- Handles block assignment and turtle pairing
 -- ============================================
 
+-- Get API references
+local config = API.getConfig()
+local state = API.getState()
+local utilities = API.getUtilities()
+
 function get_closest_unmined_block()
     -- Find the closest unmined block (x, z) starting from mining_center
     -- Spiral outward from mining_center to find closest unmined block
     local center = config.locations.mining_center
-    local min_dist = inf
+    local min_dist = utilities.inf
     local closest_block = nil
     
     -- Check mining radius if set (takes priority over mining_area)
@@ -24,10 +29,10 @@ function get_closest_unmined_block()
         max_z = center.z + radius
     else
         -- No radius, use mining_area bounds if set
-        min_x = config.mining_area and config.mining_area.min_x or -inf
-        max_x = config.mining_area and config.mining_area.max_x or inf
-        min_z = config.mining_area and config.mining_area.min_z or -inf
-        max_z = config.mining_area and config.mining_area.max_z or inf
+        min_x = config.mining_area and config.mining_area.min_x or -utilities.inf
+        max_x = config.mining_area and config.mining_area.max_x or utilities.inf
+        min_z = config.mining_area and config.mining_area.min_z or -utilities.inf
+        max_z = config.mining_area and config.mining_area.max_z or utilities.inf
     end
     
     -- Spiral outward from center

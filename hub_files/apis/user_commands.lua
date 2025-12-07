@@ -3,6 +3,10 @@
 -- Handles user input processing
 -- ============================================
 
+-- Get API references
+local config = API.getConfig()
+local state = API.getState()
+
 function user_input(input)
     -- PROCESS USER INPUT FROM USER_INPUT TABLE
     while #state.user_input > 0 do
