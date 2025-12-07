@@ -623,8 +623,10 @@ function check_turtle_versions()
     end
     
     for _, turtle in pairs(state.turtles) do
-        -- Only check turtles that have data, are not already updating, and are not awaiting version verification
-        if turtle.data and turtle.state ~= 'updating' and turtle.state ~= 'halt' and not turtle.update_complete then
+        -- Skip turtles that are already updating, halted, or awaiting version verification
+        if not turtle.data or turtle.state == 'updating' or turtle.state == 'halt' or turtle.update_complete then
+            -- Skip this turtle
+        else
             -- Check if turtle already has a task queued that will set it to updating state
             local has_update_task = false
             if turtle.tasks and #turtle.tasks > 0 then
@@ -636,9 +638,8 @@ function check_turtle_versions()
                 end
             end
             
-            -- Skip if already has an update task queued
+            -- Skip if already has an update task queued (set state to prevent future checks)
             if has_update_task then
-                -- Set state immediately to prevent duplicate checks
                 turtle.state = 'updating'
             else
                 local needs_update = false
@@ -853,7 +854,10 @@ function send_tasks(turtle)
         elseif (not turtle_data.busy) and ((not task.epoch) or (task.epoch > os.clock()) or (task.epoch + config.task_timeout < os.clock())) then
             -- ONLY SEND INSTRUCTION AFTER <config.task_timeout> SECONDS HAVE PASSED
             task.epoch = os.clock()
-            print(string.format('Sending %s directive to %d', task.action, turtle.id))
+            -- Suppress spam for 'pass' tasks that are just state transitions
+            if task.action ~= 'pass' or not task.end_state then
+                print(string.format('Sending %s directive to %d', task.action, turtle.id))
+            end
             rednet.send(turtle.id, {
                 action = task.action,
                 data = task.data,
