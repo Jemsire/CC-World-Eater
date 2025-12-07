@@ -6,8 +6,14 @@
 inf = basics.inf
 str_xyz = basics.str_xyz
 
--- Modules are loaded by startup.lua into /apis/
--- They are already available as global functions
+-- Load modules (they should already be in /apis/ from startup.lua)
+-- But we load them here to ensure they're available in this thread
+os.loadAPI('/apis/block_management')
+os.loadAPI('/apis/turtle_assignment')
+os.loadAPI('/apis/version_management')
+os.loadAPI('/apis/task_management')
+os.loadAPI('/apis/user_commands')
+os.loadAPI('/apis/state_machine')
 
 function main()
     -- INCREASE SESSION ID BY ONE

@@ -1,3 +1,6 @@
+-- Load modules needed by events.lua
+os.loadAPI('/apis/version_management')
+
 while true do
     event = {os.pullEvent()}
     if event[1] == 'rednet_message' then
