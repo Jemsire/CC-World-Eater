@@ -75,3 +75,4 @@ function in_location(xyzo, location)
     end
     return true
 end
+
