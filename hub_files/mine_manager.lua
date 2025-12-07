@@ -3,6 +3,9 @@
 -- Loads modules and coordinates mining operations
 -- ============================================
 
+-- Load shared APIs (config, state, utilities)
+loadfile('/init_apis.lua')()
+
 inf = utilities.inf
 str_xyz = utilities.str_xyz
 

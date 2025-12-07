@@ -1,3 +1,6 @@
+-- Load shared APIs (config, state, utilities)
+loadfile('/init_apis.lua')()
+
 -- Load modules needed by events.lua
 loadfile('/apis/version_management')()
 
