@@ -7,8 +7,7 @@
 [![GitHub issues](https://img.shields.io/github/issues/Jemsire/CC-World-Eater?style=flat-square)](https://github.com/Jemsire/CC-World-Eater/issues)
 [![Discord](https://img.shields.io/discord/195687811733651456?style=flat-square&logo=discord&logoColor=white&label=Discord&color=5865F2)](https://discord.jemsire.com/)
 
-A fully automated world-eating mining system for ComputerCraft turtles! Mines entire areas from surface to bedrock using coordinated multi-turtle operations.
-
+A fully automated world-eating mining system for ComputerCraft turtles! Mines entire areas from surface to bedrock using coordinated multi-turtle operations. Each turtle is assigned a column (x, z coordinate) and mines vertically from the surface down to bedrock, ensuring complete excavation of the mining area.
 
 # NOT IN FUNCTIONAL STATE - BREAKING CHANGES CONSTANT - WAIT FOR 1.0.0 TO USE!
 ```^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^```
@@ -85,20 +84,17 @@ install.lua dev
 
 ## 📋 Features
 
-- **Block-Based Column Mining**: Each turtle mines complete columns (x, z coordinates) from surface to bedrock, ensuring thorough excavation
-- **Multi-Turtle Coordination**: Automatically manages multiple turtles working together in parallel
-- **Surface to Bedrock Mining**: Excavates entire areas from top to bottom (configurable bedrock level)
-- **Spiral Mining Pattern**: Mines outward in a spiral pattern from the mining center for efficient coverage
+- **Vertical Column Mining**: Each turtle is assigned a column (x, z coordinate) and mines straight down from surface to bedrock, ensuring thorough excavation
+- **Multi-Turtle Coordination**: Automatically manages multiple turtles working together in parallel, with each turtle handling its assigned column
+- **Surface to Bedrock Mining**: Excavates entire areas from top to bottom (automatically stops when turtles encounter bedrock or other protected blocks)
 - **GPS-Based Navigation**: Uses ComputerCraft GPS for precise positioning and auto-detection of hub location
 - **Mining Radius Control**: Configure mining area with radius limits or unlimited expansion
 - **Obstacle Avoidance**: Turtles automatically navigate around protected blocks (chests, computers, spawners, etc.)
 - **Auto-Detection**: Hub computer location and disk drive position are automatically detected via GPS
-- **Single-Drive Setup**: All files fit on a single floppy disk (~213KB used, ~299KB remaining)
 - **Flexible Configuration**: Works with or without peripheral mods (Chunky Turtles optional)
 - **Real-Time Monitoring**: Hub computer provides status updates, turtle views, and control interface
-- **Queued Update System**: Turtles automatically return home and update one at a time at the disk drive
 - **GitHub Integration**: Direct updates from GitHub repository with automatic version tracking
-- **Version Management**: Separate version tracking for hub and turtle systems (see `hub_files/version.lua` and `turtle_files/version.lua`)
+- **Version Management**: Centralized version tracking for hub and turtles with alerts
 - **Installation Wizard**: Interactive setup wizard guides you through configuration
 
 ## 🎮 Compatibility
@@ -131,14 +127,14 @@ The World Eater system is highly configurable through `hub_files/config.lua`. Ke
   mining_radius = 100  -- Mines 100 blocks radius (200 block diameter)
   ```
 
-- **`bedrock_level`**: Y coordinate where mining stops (default: `-64` for Minecraft 1.18+)
+- **`mine_entrance`**: Central reference point for the entire setup (center of prep area, y should be 1 block above surface)
   ```lua
-  bedrock_level = -64
+  mine_entrance = {x = 2141, y = 132, z = -130}
   ```
 
-- **`hub_reference`**: Central reference point for the entire setup (center of prep area)
+- **`mission_length`**: Maximum number of blocks to mine per trip before returning to base (default: `150`)
   ```lua
-  hub_reference = {x = 104, y = 76, z = 215}
+  mission_length = 150
   ```
 
 ### Turtle Behavior
@@ -154,13 +150,6 @@ Blocks containing these strings will not be mined (turtles navigate around them)
 
 Configure in `dig_disallow` table in `hub_files/config.lua`.
 
-### Auto-Detection
-
-- **Hub Location**: Automatically detected via GPS at startup (must be within 8 blocks north/south of `hub_reference`)
-- **Disk Drive**: Automatically calculated as 1 block below hub computer
-- **Mining Center**: Automatically set to 2 blocks below `hub_reference`
-
-> **Note**: See `hub_files/config.lua` for all available configuration options and detailed comments.
 
 ## 📺 Video Tutorials
 
@@ -270,24 +259,11 @@ disk/hub_files/update dev
 
 ### Turtle Update
 
-Turtles automatically update when the hub runs `update`. They copy files directly from the hub's disk drive (no GitHub download needed). Turtles always update their config files to stay in sync with the hub's configuration.
+Turtles can be updated using `update` in their terminals or using the menu to update one or all. They copy files directly from the hub's disk drive (no GitHub download needed). Turtles always update their config files to stay in sync with the hub's configuration.
 
-**Note:** Turtles do not have individual update commands - they are updated automatically when the hub updates.
-
-### Pocket Computer Update
-
-From a pocket computer, run:
-```lua
-disk/pocket_files/update
-```
-
-To also update config files:
-```lua
-disk/pocket_files/update force-config
-```
 
 **Note:** 
-- Hub update: By default, config files (`config.lua` and `info.lua`) are **not** updated to preserve your settings. Use `force-config` only if you want to reset to default configurations.
+- Hub update: By default, config files (`config.lua` and `info.lua`) are **not** updated to preserve your settings. Use `update config` only if you want to reset to default configurations.
 - Turtle update: Turtles **always** update their config files when updating to stay in sync with the hub's configuration.
 
 ## 💾 Storage & Installation
@@ -303,7 +279,7 @@ If you need more space, you can increase the floppy disk size limit in the mod's
 The installer supports multiple methods:
 - **GitHub Download** (Recommended): Direct download from repository
 - **Pastebin Fallback**: For environments without internet access
-- **Interactive Wizard**: Guides you through hub reference setup and configuration
+- **Interactive Wizard**: Guides you through mine entrance setup and configuration
 
 The installer automatically:
 - Detects system type (hub/turtle/pocket/chunky)
@@ -319,7 +295,7 @@ After having some chats with folks, it seems like there are some common pitfalls
 
 * **GPS has an incorrect coordinate.** There are 4 computers in the GPS setup, each with an x, y, and z coordinate. If any of these numbers are entered wrong, the GPS will act funky and nothing will work. A good way to test it's working is to enter `gps locate` into any rednet enabled computer or turtle and verify the answer.
 
-* **Hub reference coordinates are incorrect.** The `hub_reference` in the config file is the **center of the prepare area**, not the hub computer location. The hub computer location is automatically detected via GPS at startup. The disk drive location is automatically calculated as 1 block below the hub computer. Make sure your GPS system is working correctly (`gps locate` should return valid coordinates).
+* **Mine entrance coordinates are incorrect.** The `mine_entrance` in the config file is the **center of the prepare area** (y should be 1 block above surface), not the hub computer location. The hub computer location is automatically detected via GPS at startup. The disk drive location is automatically calculated as 1 block below the hub computer. Make sure your GPS system is working correctly (`gps locate` should return valid coordinates).
 
 * **Turtles are more than 8 blocks away from the mine entrance.** Turtles have to be within the `control_room_area` when they are above ground, otherwise they will get lost and end up in `halt` mode. The `control_room_area` field in the `hub_files/config.lua` file is adjustable to fit whatever size you need. **Note:** If you have a large number of turtles, you may need to increase the control room area to fit a larger turtle parking area.
 
@@ -327,7 +303,7 @@ After having some chats with folks, it seems like there are some common pitfalls
 
 * **Protected blocks blocking progress.** If turtles keep getting stuck on the same blocks, those blocks may be in the `dig_disallow` list. Check `hub_files/config.lua` and remove any blocks you want mined (except bedrock, which should always be protected).
 
-* **Version mismatch between hub and turtles.** The system tracks versions separately for hub and turtles. Run `update` from the hub to ensure all systems are synchronized.
+* **Version mismatch between hub and turtles.** The system uses a shared version file (`shared_files/version.lua`). Run `update` from the hub to ensure all systems are synchronized to the same version.
 
 Hopefully that covers a lot of it. Again, let me know if you still can't get the thing to work.
 
@@ -338,24 +314,36 @@ CC-World-Eater/
 ├── hub_files/          # Hub computer files
 │   ├── config.lua      # Hub configuration (mining settings, locations, etc.)
 │   ├── monitor.lua     # Status monitoring and UI
-│   ├── mine_manager.lua # Mining assignment and block tracking
+│   ├── worldeater.lua  # Mining assignment and block tracking
 │   ├── github_api.lua  # GitHub API helper functions
-│   ├── version.lua     # Hub version tracking
+│   ├── events.lua     # Event handling and turtle communication
+│   ├── user.lua       # User input handling
+│   ├── report.lua     # Status reporting
+│   ├── state.lua      # State management
+│   ├── startup.lua    # Hub startup script
 │   └── ...
 ├── turtle_files/       # Turtle computer files
 │   ├── config.lua      # Turtle configuration
-│   ├── turtle_main.lua # Main turtle logic
+│   ├── mastermine.lua # Main turtle logic and request processing
 │   ├── actions.lua     # Mining actions (go_to_block, mine_to_bedrock, etc.)
-│   ├── version.lua     # Turtle version tracking
+│   ├── receive.lua    # Rednet message receiving
+│   ├── report.lua     # Status reporting
+│   ├── state.lua      # State management
+│   ├── startup.lua    # Turtle startup script
 │   └── ...
 ├── pocket_files/       # Pocket computer files
+│   ├── info.lua       # Pocket computer info
+│   ├── report.lua     # Status reporting
+│   ├── startup.lua    # Pocket startup script
 │   └── ...
+├── shared_files/       # Shared files between hub and turtles
+│   ├── version.lua     # Version tracking (currently v0.3.2)
+│   └── basics.lua     # Basic utility functions
 ├── assets/             # Images and assets for documentation
 │   └── images/         # Screenshots and setup images
-├── hub.lua             # Hub startup script
-├── turtle.lua          # Turtle startup script
-├── pocket.lua          # Pocket startup script
-└── install.lua         # Bootstrap installer with setup wizard
+├── hub.lua             # Hub bootstrap script
+├── turtle.lua          # Turtle bootstrap script
+└── pocket.lua          # Pocket bootstrap script
 ```
 
 ## 🤝 Contributing
