@@ -6,7 +6,7 @@ on:
       - main
       - master
     paths:
-      - "hub_files/version.lua"
+      - "shared_files/version.lua"
   workflow_dispatch:
 
 jobs:

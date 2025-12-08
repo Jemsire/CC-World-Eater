@@ -5,6 +5,9 @@
 
 -- Function to compare two semantic versions
 -- Returns: -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2, nil if invalid
+-- DEV versions are considered "greater than" their release counterparts
+-- because DEV = that version PLUS additional commits
+-- e.g., 0.3.1-DEV > 0.3.1, but 0.3.2 > 0.3.1-DEV
 function compare_versions(v1, v2)
     if not v1 or not v2 or type(v1) ~= "table" or type(v2) ~= "table" then
         return nil
@@ -22,7 +25,19 @@ function compare_versions(v1, v2)
     if v1.hotfix > v2.hotfix then return 1 end
     if v1.hotfix < v2.hotfix then return -1 end
     
-    return 0  -- Equal
+    -- If numeric versions are equal, compare dev status
+    -- DEV versions are considered "greater than" release versions
+    -- because DEV = that version + additional commits
+    local v1_is_dev = v1.dev == true or v1.dev_suffix == "-DEV"
+    local v2_is_dev = v2.dev == true or v2.dev_suffix == "-DEV"
+    
+    if v1_is_dev and not v2_is_dev then
+        return 1   -- v1 is dev, v2 is release: v1 > v2 (dev has more commits)
+    elseif not v1_is_dev and v2_is_dev then
+        return -1  -- v1 is release, v2 is dev: v1 < v2 (dev has more commits)
+    end
+    
+    return 0  -- Equal (both dev or both release)
 end
 
 -- Simple JSON parser for GitHub Trees API response
