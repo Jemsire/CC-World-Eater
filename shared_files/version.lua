@@ -3,6 +3,7 @@
 -- DEV MODE: This version has -DEV suffix
 -- Version format: semantic versioning MAJOR.MINOR.HOTFIX
 -- Returns: {major=1, minor=0, hotfix=0, dev_suffix="-DEV", dev=true}
+-- Note: dev_suffix is for display only. All comparisons use dev=true/false
 return {
     major = 0,
     minor = 3,

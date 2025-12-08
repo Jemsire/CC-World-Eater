@@ -59,6 +59,42 @@ while true do
         elseif protocol == 'update_request' then
             -- Handle update requests with file streaming to avoid 64KB rednet limit
             if fs.isDir(message) then
+                -- Check if turtle version matches hub version before updating
+                local turtle = state.turtles[sender]
+                local turtle_version = turtle and turtle.data and turtle.data.version
+                
+                -- Get hub version
+                local hub_version = nil
+                if fs.exists("/version.lua") then
+                    local version_func = loadfile("/version.lua")
+                    if version_func then
+                        local success, version = pcall(version_func)
+                        if success and version and type(version) == "table" then
+                            hub_version = version
+                        end
+                    end
+                end
+                
+                -- Check if versions match (only update if different)
+                -- Note: compare_versions only checks dev=true/false, not dev_suffix (which is for display only)
+                if turtle_version and hub_version and github_api then
+                    -- Compare versions (compares dev=true/false, ignores dev_suffix)
+                    local comparison = github_api.compare_versions(turtle_version, hub_version)
+                    
+                    if comparison == 0 then
+                        -- Versions match - turtle is up to date
+                        local turtle_str = string.format("%d.%d.%d", turtle_version.major or 0, turtle_version.minor or 0, turtle_version.hotfix or 0)
+                        local hub_str = string.format("%d.%d.%d", hub_version.major or 0, hub_version.minor or 0, hub_version.hotfix or 0)
+                        print('[Update] Turtle ' .. sender .. ' is already up to date (turtle: ' .. turtle_str .. ', hub: ' .. hub_str .. '). Skipping update.')
+                        rednet.send(sender, {error = 'Already up to date'}, 'update_error')
+                        return
+                    end
+                elseif not turtle_version then
+                    print('[Update] Warning: Turtle ' .. sender .. ' version not available. Proceeding with update.')
+                elseif not hub_version then
+                    print('[Update] Warning: Hub version not available. Proceeding with update.')
+                end
+                
                 print('[Update] Directory found. Pulling files for turtle ' .. sender .. '.')
                 -- First, build a list of all files to send
                 local file_list = {}

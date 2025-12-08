@@ -130,11 +130,12 @@ print("  World Eater Update")
 print("========================================")
 
 -- Function to format version table as string "MAJOR.MINOR.HOTFIX" or "MAJOR.MINOR.HOTFIX-DEV"
+-- Note: Only shows -DEV if dev == true (dev_suffix is for metadata only)
 local function format_version(version)
     if version and type(version) == "table" then
         local version_str = string.format("%d.%d.%d", version.major or 0, version.minor or 0, version.hotfix or 0)
-        -- Add DEV suffix if present
-        if version.dev_suffix == "-DEV" or version.dev == true then
+        -- Add DEV suffix only if dev == true (not dev_suffix, which is just metadata)
+        if version.dev == true then
             version_str = version_str .. "-DEV"
         end
         return version_str
@@ -145,7 +146,7 @@ end
 
 -- Function to get local version
 local function get_local_version()
-    local version_path = "/hub_files/version.lua"
+    local version_path = "/version.lua"
     
     if fs.exists(version_path) then
         local version_file = fs.open(version_path, "r")
@@ -214,16 +215,31 @@ if local_version then
     -- Check version comparison only in non-dev mode
     if not dev_mode then
         local comparison = github_api.compare_versions(local_version, remote_version)
-        if comparison and comparison >= 0 then
+        
+        -- Only update if versions are different, unless force is used
+        -- comparison: -1 = local < remote (update needed), 0 = equal (skip), 1 = local > remote (skip)
+        if comparison and comparison == 0 then
+            -- Versions are equal - skip update unless force is used
             if force_update then
                 print("Force update mode: Updating despite matching versions...")
                 print("")
             else
-                print("Already up-to-date! No update needed.")
+                print("Already up-to-date! Versions match (" .. local_str .. ").")
                 print("(Use 'update force' to force update, 'update dev' for dev mode, or 'update config' to update config files)")
                 return
             end
+        elseif comparison and comparison > 0 then
+            -- Local version is newer than remote - skip update unless force is used
+            if force_update then
+                print("Force update mode: Updating despite local version being newer...")
+                print("")
+            else
+                print("Local version (" .. local_str .. ") is newer than remote (" .. remote_str .. ").")
+                print("No update needed. (Use 'update force' to force update anyway)")
+                return
+            end
         end
+        -- If comparison < 0, local is older than remote, so update is needed - continue
         
         -- Check if this is a major version update (skip in dev mode)
         local is_major_update = false
@@ -282,6 +298,9 @@ else
     print("Mode: RELEASE (version locked to " .. (latest_tag or GITHUB_BRANCH) .. ")")
 end
 print("")
+
+print("Continuing in 5 seconds...")
+sleep(5)
 
 local updated_count = 0
 local skipped_count = 0

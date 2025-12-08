@@ -104,7 +104,8 @@ function format_version(version)
         return "unknown"
     end
     local version_str = string.format("%d.%d.%d", version.major or 0, version.minor or 0, version.hotfix or 0)
-    if version.dev_suffix or version.dev then
+    -- Only show -DEV if dev == true (dev_suffix is for metadata only)
+    if version.dev == true then
         version_str = version_str .. "-DEV"
     end
     return version_str

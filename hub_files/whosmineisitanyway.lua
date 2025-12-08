@@ -591,12 +591,47 @@ function user_input(input)
             end
         elseif command == 'update' then
             -- FEED TURTLE DINNER
+            -- Get hub version for comparison
+            local hub_version = nil
+            if fs.exists("/version.lua") then
+                local version_func = loadfile("/version.lua")
+                if version_func then
+                    local success, version = pcall(version_func)
+                    if success and version and type(version) == "table" then
+                        hub_version = version
+                    end
+                end
+            end
+            
             for _, turtle in pairs(turtles) do
-                turtle.tasks = {}
-                add_task(turtle, {action = 'pass'})
-                rednet.send(turtle.id, {
-                    action = 'update',
-                }, 'mastermine')
+                -- Check if turtle version matches hub version before updating
+                local turtle_version = turtle.data and turtle.data.version
+                local needs_update = true
+                
+                if turtle_version and hub_version and github_api then
+                    -- Compare versions
+                    local comparison = github_api.compare_versions(turtle_version, hub_version)
+                    
+                    if comparison == 0 then
+                        -- Versions match - turtle is up to date
+                        local turtle_str = string.format("%d.%d.%d", turtle_version.major or 0, turtle_version.minor or 0, turtle_version.hotfix or 0)
+                        local hub_str = string.format("%d.%d.%d", hub_version.major or 0, hub_version.minor or 0, hub_version.hotfix or 0)
+                        print('[Update] Turtle ' .. turtle.id .. ' is already up to date (turtle: ' .. turtle_str .. ', hub: ' .. hub_str .. '). Skipping update.')
+                        needs_update = false
+                    end
+                elseif not turtle_version then
+                    print('[Update] Warning: Turtle ' .. turtle.id .. ' version not available. Proceeding with update.')
+                elseif not hub_version then
+                    print('[Update] Warning: Hub version not available. Proceeding with update.')
+                end
+                
+                if needs_update then
+                    turtle.tasks = {}
+                    add_task(turtle, {action = 'pass'})
+                    rednet.send(turtle.id, {
+                        action = 'update',
+                    }, 'mastermine')
+                end
             end
         elseif command == 'return' then
             -- BRING TURTLE HOME
