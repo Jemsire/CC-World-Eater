@@ -340,7 +340,7 @@ function assign_column_to_turtle(turtle)
     }
 
     add_task(turtle, {
-        action = 'go_to_location',
+        action = 'go_to',
         data = {target},
         end_state = 'mining'
     })
