@@ -1379,7 +1379,7 @@ function draw_monitor()
             end
         end
     end
-    term.setCursorPos(elements.level_indicator.x, elements.level_indicator.y)
+    term.setCursorPos(elements.mined_indicator.x, elements.mined_indicator.y)
     term.write(string.format("MINED: %4d", mined_count))
     term.setCursorPos(elements.zoom_indicator.x, elements.zoom_indicator.y)
     term.write("ZOOM: " .. monitor_zoom_level)
@@ -1579,12 +1579,6 @@ function touch_monitor(monitor_touch)
         monitor_location.x = monitor_location.x - zoom_factor
     elseif monitor_touch.x == elements.right.x and monitor_touch.y == elements.right.y then
         monitor_location.x = monitor_location.x + zoom_factor
-    elseif monitor_touch.x == elements.level_up.x and monitor_touch.y == elements.level_up.y then
-        monitor_level_index = math.min(monitor_level_index + 1, #config.mine_levels)
-        select_mine_level()
-    elseif monitor_touch.x == elements.level_down.x and monitor_touch.y == elements.level_down.y then
-        monitor_level_index = math.max(monitor_level_index - 1, 1)
-        select_mine_level()
     elseif monitor_touch.x == elements.zoom_in.x and monitor_touch.y == elements.zoom_in.y then
         monitor_zoom_level = math.max(monitor_zoom_level - 1, 0)
     elseif monitor_touch.x == elements.zoom_out.x and monitor_touch.y == elements.zoom_out.y then
@@ -1605,9 +1599,7 @@ function init_elements()
         down = {x = math.ceil(monitor_width / 2), y = monitor_height},
         left = {x = 1, y = math.ceil(monitor_height / 2)},
         right = {x = monitor_width, y = math.ceil(monitor_height / 2)},
-        level_up = {x = monitor_width, y = 3}, -- Shifted down 2 lines
-        level_down = {x = monitor_width - 11, y = 3}, -- Shifted down 2 lines
-        level_indicator = {x = monitor_width - 10, y = 3}, -- Shifted down 2 lines
+        mined_indicator = {x = monitor_width - 10, y = 3}, -- Shifted down 2 lines
         zoom_in = {x = monitor_width, y = 2}, -- Shifted down 2 lines
         zoom_out = {x = monitor_width - 8, y = 2}, -- Shifted down 2 lines
         zoom_indicator = {x = monitor_width - 7, y = 2}, -- Shifted down 2 lines
@@ -1666,8 +1658,14 @@ end
 
 function draw_tab_bar()
     term.redirect(monitor)
-    term.setBackgroundColor(colors.gray)
-    term.setTextColor(colors.white)
+    local background_color = colors.black
+    if(state.on) then
+        background_color = colors.lime
+    else
+        background_color = colors.red
+    end
+    term.setTextColor(colors.black)
+    term.setBackgroundColor(background_color)
 
     -- Draw tab bar background
     for x = 1, monitor_width do
@@ -1685,9 +1683,11 @@ function draw_tab_bar()
 
     for _, tab in ipairs(tabs) do
         if current_tab == tab.id then
-            term.setBackgroundColor(colors.blue)
+            term.setBackgroundColor(colors.brown)
+            term.setTextColor(colors.white)
         else
-            term.setBackgroundColor(colors.gray)
+            term.setBackgroundColor(background_color)
+            term.setTextColor(colors.black)
         end
         term.setCursorPos(tab.x, 1)
         term.write(" " .. tab.name .. " ")
