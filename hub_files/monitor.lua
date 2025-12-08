@@ -1,7 +1,7 @@
 -- Current active tab
 local current_tab = "menu" -- 'menu', 'map', 'turtles', 'stats'
 
-menu_lines = {
+local menu_lines = {
     "##### ##### ##### ##### #####",
     "#     #   #   #   #     #   #",
     "###   #####   #   ###   #### ",
@@ -89,29 +89,25 @@ local github_version_cache = nil
 local turtles_tab_selected = 1
 local turtles_tab_ids = {}
 
+-- Map turtles lookup (used by draw_monitor and touch_monitor)
+local turtles = {}
+
 -- ============================================================================
 -- HELPER FUNCTIONS
 -- ============================================================================
 
-function debug_print(string)
-    term.redirect(monitor.restore_to)
-    print(string)
-    term.redirect(monitor)
-end
-
-function format_version(version)
+local function format_version(version)
     if not version or type(version) ~= "table" then
         return "unknown"
     end
     local version_str = string.format("%d.%d.%d", version.major or 0, version.minor or 0, version.hotfix or 0)
-    -- Only show -DEV if dev == true (dev_suffix is for metadata only)
     if version.dev == true then
         version_str = version_str .. "-DEV"
     end
     return version_str
 end
 
-function get_hub_version()
+local function get_hub_version()
     if fs.exists("/version.lua") then
         local version_func = loadfile("/version.lua")
         if version_func then
@@ -124,7 +120,7 @@ function get_hub_version()
     return nil
 end
 
-function is_hub_up_to_date()
+local function is_hub_up_to_date()
     local hub_version = get_hub_version()
     if not hub_version or not github_version_cache then
         return nil
@@ -132,7 +128,7 @@ function is_hub_up_to_date()
     return github_api.compare_versions(hub_version, github_version_cache) >= 0
 end
 
-function turtle_matches_hub(turtle_version)
+local function turtle_matches_hub(turtle_version)
     local hub_version = get_hub_version()
     if not hub_version or not turtle_version then
         return false
@@ -140,14 +136,14 @@ function turtle_matches_hub(turtle_version)
     return github_api.compare_versions(turtle_version, hub_version) == 0
 end
 
-function is_turtle_up_to_date(turtle)
+local function is_turtle_up_to_date(turtle)
     if not turtle or not turtle.data or not turtle.data.version then
         return nil
     end
     return turtle_matches_hub(turtle.data.version)
 end
 
-function clear_content_area()
+local function clear_content_area()
     term.setBackgroundColor(colors.black)
     for y = 2, monitor_height do
         term.setCursorPos(1, y)
@@ -159,7 +155,7 @@ end
 -- REUSABLE UI DRAWING FUNCTIONS
 -- ============================================================================
 
-function draw_button(x, y, label, button_color, label_color)
+local function draw_button(x, y, label, button_color, label_color)
     button_color = button_color or colors.green
     label_color = label_color or colors.brown
     term.setCursorPos(x, y)
@@ -170,8 +166,7 @@ function draw_button(x, y, label, button_color, label_color)
     term.write("-" .. label)
 end
 
-function draw_button_right(x, y, label, button_color, label_color)
-    -- Button on right, text on left
+local function draw_button_right(x, y, label, button_color, label_color)
     button_color = button_color or colors.green
     label_color = label_color or colors.brown
     term.setBackgroundColor(label_color)
@@ -183,7 +178,7 @@ function draw_button_right(x, y, label, button_color, label_color)
     term.write("*")
 end
 
-function draw_movement_button(x, y, symbol, label, enabled)
+local function draw_movement_button(x, y, symbol, label, enabled)
     term.setCursorPos(x, y)
     term.setTextColor(colors.white)
     term.setBackgroundColor(enabled and colors.green or colors.gray)
@@ -193,17 +188,10 @@ function draw_movement_button(x, y, symbol, label, enabled)
     term.write("-" .. label)
 end
 
-function parse_and_draw_colored_text(text)
-    -- Parses and draws text with Minecraft-style color codes
-    -- Single code: &a = text color only
-    -- Double code: &a&b = background color (first) + text color (second)
-    -- Special: &t = transparent background (no background set)
-    -- Reset: &r = reset both to defaults
-    
+local function parse_and_draw_colored_text(text)
     local default_text_color = colors.white
-    default_bg_color = nil
+    local default_bg_color = nil
     
-    -- Minecraft color code mapping to ComputerCraft colors
     local color_codes = {
         ["0"] = colors.black,
         ["1"] = colors.blue,
@@ -211,18 +199,18 @@ function parse_and_draw_colored_text(text)
         ["3"] = colors.cyan,
         ["4"] = colors.red,
         ["5"] = colors.purple,
-        ["6"] = colors.orange,  -- gold/orange
+        ["6"] = colors.orange,
         ["7"] = colors.lightGray,
         ["8"] = colors.gray,
         ["9"] = colors.lightBlue,
-        ["a"] = colors.lime,   -- bright green
-        ["b"] = colors.brown,    -- aqua
+        ["a"] = colors.lime,
+        ["b"] = colors.brown,
         ["c"] = colors.pink,
-        ["d"] = colors.magenta, -- light purple
+        ["d"] = colors.magenta,
         ["e"] = colors.yellow,
         ["f"] = colors.white,
-        ["r"] = default_text_color,  -- reset text color
-        ["t"] = nil  -- transparent background
+        ["r"] = default_text_color,
+        ["t"] = nil
     }
     
     local current_text_color = default_text_color
@@ -231,67 +219,57 @@ function parse_and_draw_colored_text(text)
     
     while pos <= #text do
         if string.sub(text, pos, pos) == "&" and pos < #text then
-            -- Found a color code - check if it's a double code
             local code1 = string.lower(string.sub(text, pos + 1, pos + 1))
             
-            -- Check if there's another & code immediately after (double code)
             if pos + 2 <= #text and string.sub(text, pos + 2, pos + 2) == "&" and pos + 3 <= #text then
                 local code2 = string.lower(string.sub(text, pos + 3, pos + 3))
                 
                 -- Double code: first is background, second is text
-                -- Handle background (first code)
                 if code1 == "t" then
-                    current_bg_color = nil  -- Transparent background
+                    current_bg_color = nil
                 elseif code1 == "r" then
-                    current_bg_color = default_bg_color  -- Reset background
+                    current_bg_color = default_bg_color
                 elseif color_codes[code1] then
                     current_bg_color = color_codes[code1]
                 end
                 
-                -- Handle text color (second code)
                 if code2 == "r" then
                     current_text_color = default_text_color
                 elseif color_codes[code2] then
                     current_text_color = color_codes[code2]
                 end
                 
-                pos = pos + 4  -- Skip both & codes
+                pos = pos + 4
             else
                 -- Single code: text color only
                 if code1 == "r" then
-                    -- Reset both
                     current_text_color = default_text_color
                 elseif color_codes[code1] then
                     current_text_color = color_codes[code1]
                 end
                 
-                pos = pos + 2  -- Skip the & and the code character
+                pos = pos + 2
             end
         else
-            -- Write the character with current colors
             if current_bg_color then
                 term.setBackgroundColor(current_bg_color)
             end
             term.setTextColor(current_text_color)
-            local char = string.sub(text, pos, pos)
-            term.write(char)
+            term.write(string.sub(text, pos, pos))
             pos = pos + 1
         end
     end
 end
 
-function draw_label(x, y, text)
+local function draw_label(x, y, text)
     -- Draws a label with optional color code support
     -- If text contains & codes, they will be parsed and applied
     -- Color codes: &a (text), &a&b (bg+text), &t (transparent bg), &r (reset)
-    
     term.setCursorPos(x, y)
-    
-    -- Parse and draw with initial background color
     parse_and_draw_colored_text(text)
 end
 
-function draw_version_status(x, y, version, is_up_to_date)
+local function draw_version_status(x, y, version, is_up_to_date)
     local status_text, version_text
     
     if is_up_to_date == true then
@@ -308,7 +286,7 @@ function draw_version_status(x, y, version, is_up_to_date)
     draw_label(x, y, status_text .. version_text)
 end
 
-function draw_decimal_id(x, y, id)
+local function draw_decimal_id(x, y, id)
     for decimal_string in string.format("%04d", id):gmatch "." do
         for y_offset, line in pairs(decimals[tonumber(decimal_string)]) do
             term.setCursorPos(x, y + y_offset - 1)
@@ -321,7 +299,7 @@ function draw_decimal_id(x, y, id)
     end
 end
 
-function draw_peripheral(x, y, peripheral_type)
+local function draw_peripheral(x, y, peripheral_type)
     local colors_map = {
         modem = {colors.lightGray, colors.lightGray, colors.lightGray},
         pick = {colors.cyan, colors.cyan, colors.brown},
@@ -343,8 +321,7 @@ function draw_peripheral(x, y, peripheral_type)
     end
 end
 
-function draw_turtle_face(x, y, turtle_data)
-    -- Main body
+local function draw_turtle_face(x, y, turtle_data)
     term.setBackgroundColor(colors.yellow)
     for row = 0, 4 do
         term.setCursorPos(x + 1, y + row)
@@ -359,12 +336,11 @@ function draw_turtle_face(x, y, turtle_data)
         end
     end
     
-    -- Peripherals
     draw_peripheral(x, y, turtle_data.peripheral_right)
     draw_peripheral(x + 8, y, turtle_data.peripheral_left)
 end
 
-function draw_turtle_data(x, y, turtle)
+local function draw_turtle_data(x, y, turtle)
     local data = turtle.data
     local fields = {
         {"&fState: &a", turtle.state},
@@ -381,7 +357,7 @@ function draw_turtle_data(x, y, turtle)
     end
 end
 
-function draw_turtle_controls(turtle_id, is_mining)
+local function draw_turtle_controls(turtle_id, is_mining)
     -- Command buttons
     draw_button(elements.turtle_return.x, elements.turtle_return.y, "RETURN")
     draw_button(elements.turtle_update.x, elements.turtle_update.y, "UPDATE")
@@ -399,8 +375,7 @@ function draw_turtle_controls(turtle_id, is_mining)
     draw_movement_button(elements.turtle_left.x, elements.turtle_left.y, "<", "LEFT", true)
     draw_movement_button(elements.turtle_right.x, elements.turtle_right.y, ">", "RIGHT", true)
     
-    -- Dig buttons
-    term.setTextColor(colors.white)
+-- Dig buttons    term.setTextColor(colors.white)
     term.setBackgroundColor(is_mining and colors.green or colors.gray)
     term.setCursorPos(elements.turtle_dig_up.x, elements.turtle_dig_up.y)
     term.write("^")
@@ -415,7 +390,7 @@ function draw_turtle_controls(turtle_id, is_mining)
     term.write("v")
 end
 
-function draw_turtle_nav_buttons(selected, total)
+local function draw_turtle_nav_buttons(selected, total)
     term.setTextColor(colors.white)
     term.setBackgroundColor(selected == 1 and colors.gray or colors.green)
     term.setCursorPos(elements.left.x, elements.left.y)
@@ -425,48 +400,30 @@ function draw_turtle_nav_buttons(selected, total)
     term.write(">")
 end
 
-function draw_turtle_details(turtle, turtle_id, show_exit_button)
-    local background_color = colors.black
-    term.setBackgroundColor(background_color)
+local function draw_turtle_details(turtle, turtle_id)
+    term.setBackgroundColor(colors.black)
     
-    -- Connection status
     if turtle.last_update + config.turtle_timeout < os.clock() then
         draw_label(elements.turtle_lost.x, elements.turtle_lost.y, "&cCONNECTION LOST")
     end
     
-    -- Turtle ID
     draw_decimal_id(elements.turtle_id.x, elements.turtle_id.y, turtle_id)
-    
-    -- Turtle face
     draw_turtle_face(elements.turtle_face.x, elements.turtle_face.y, turtle.data)
     
-    term.setBackgroundColor(background_color)
-    
-    -- Turtle data
+    term.setBackgroundColor(colors.black)
     draw_turtle_data(elements.turtle_data.x, elements.turtle_data.y, turtle)
-    
-    -- Version status
     draw_version_status(elements.turtle_version.x, elements.turtle_version.y, 
                         turtle.data.version, is_turtle_up_to_date(turtle))
     
     term.setTextColor(colors.white)
-    
-    -- Controls
     draw_turtle_controls(turtle_id, turtle.data.turtle_type == "mining")
-    
-    -- Exit button (only in viewer mode)
-    if show_exit_button then
-        term.setBackgroundColor(colors.red)
-        term.setCursorPos(elements.viewer_exit.x, elements.viewer_exit.y)
-        term.write("x")
-    end
 end
 
 -- ============================================================================
 -- TAB BAR
 -- ============================================================================
 
-function draw_tab_bar()
+local function draw_tab_bar()
     term.redirect(monitor)
     local background_color = state.on and colors.lime or colors.red
     term.setTextColor(colors.black)
@@ -501,126 +458,15 @@ function draw_tab_bar()
 end
 
 -- ============================================================================
--- TURTLE VIEWER (Modal)
--- ============================================================================
-
-function turtle_viewer(turtle_ids)
-    term.redirect(monitor)
-    local selected = 1
-
-    while true do
-        draw_tab_bar()
-        
-        local turtle_id = turtle_ids[selected]
-        local turtle = state.turtles[turtle_id]
-
-        -- Handle monitor touches
-        while #state.monitor_touches > 0 do
-            local touch = table.remove(state.monitor_touches)
-            
-            -- Tab bar clicks
-            if touch.y == 1 then
-                local tab_map = {
-                    {2, 7, "menu"}, {9, 12, "map"}, {14, 21, "turtles"}, {23, 28, "stats"}
-                }
-                for _, t in ipairs(tab_map) do
-                    if touch.x >= t[1] and touch.x <= t[2] then
-                        current_tab = t[3]
-                        term.redirect(monitor.restore_to)
-                        return
-                    end
-                end
-            elseif touch.x == elements.left.x and touch.y == elements.left.y then
-                selected = math.max(selected - 1, 1)
-            elseif touch.x == elements.right.x and touch.y == elements.right.y then
-                selected = math.min(selected + 1, #turtle_ids)
-            elseif touch.x == elements.viewer_exit.x and touch.y == elements.viewer_exit.y then
-                term.redirect(monitor.restore_to)
-                return
-            elseif touch.x == elements.turtle_find.x and touch.y == elements.turtle_find.y then
-                monitor_location.x = turtle.data.location.x
-                monitor_location.z = turtle.data.location.z
-                monitor_zoom_level = 0
-                if turtle.block then
-                    monitor_location.x = turtle.block.x
-                    monitor_location.z = turtle.block.z
-                end
-                term.redirect(monitor.restore_to)
-                return
-            else
-                -- Command button handling
-                local commands = {
-                    {elements.turtle_return, "return"},
-                    {elements.turtle_reboot, "reboot"},
-                    {elements.turtle_halt, "halt"},
-                    {elements.turtle_clear, "clear"},
-                    {elements.turtle_reset, "reset"},
-                    {elements.turtle_update, "update"},
-                }
-                for _, cmd in ipairs(commands) do
-                    if touch.x == cmd[1].x and touch.y == cmd[1].y then
-                        table.insert(state.user_input, cmd[2] .. " " .. turtle_id)
-                        break
-                    end
-                end
-                
-                -- Movement handling
-                local movements = {
-                    {elements.turtle_forward, "go forward"},
-                    {elements.turtle_back, "go back"},
-                    {elements.turtle_up, "go up"},
-                    {elements.turtle_down, "go down"},
-                    {elements.turtle_left, "go left"},
-                    {elements.turtle_right, "go right"},
-                }
-                for _, mov in ipairs(movements) do
-                    if touch.x == mov[1].x and touch.y == mov[1].y then
-                        table.insert(state.user_input, "turtle " .. turtle_id .. " " .. mov[2])
-                        break
-                    end
-                end
-                
-                -- Dig handling (mining only)
-                if turtle.data.turtle_type == "mining" then
-                    local digs = {
-                        {elements.turtle_dig_up, "digblock up"},
-                        {elements.turtle_dig, "digblock forward"},
-                        {elements.turtle_dig_down, "digblock down"},
-                    }
-                    for _, dig in ipairs(digs) do
-                        if touch.x == dig[1].x and touch.y == dig[1].y then
-                            table.insert(state.user_input, "turtle " .. turtle_id .. " " .. dig[2])
-                            break
-                        end
-                    end
-                end
-            end
-        end
-
-        turtle_id = turtle_ids[selected]
-        turtle = state.turtles[turtle_id]
-
-        clear_content_area()
-        draw_turtle_details(turtle, turtle_id, true)
-        draw_turtle_nav_buttons(selected, #turtle_ids)
-
-        monitor.setVisible(true)
-        monitor.setVisible(false)
-        sleep(sleep_len)
-    end
-end
-
--- ============================================================================
 -- TAB CONTENT DRAWING
 -- ============================================================================
 
-function draw_menu_content()
+local function draw_menu_content()
     term.redirect(monitor)
     clear_content_area()
 
     draw_label(elements.menu_title.x, elements.menu_title.y, "&fWORLD")
 
-    -- Keep the pixel art loop as-is (special drawing)
     for y_offset, line in pairs(menu_lines) do
         term.setCursorPos(elements.menu_title.x, elements.menu_title.y + y_offset)
         for char in line:gmatch "." do
@@ -654,11 +500,10 @@ function draw_menu_content()
     term.redirect(monitor.restore_to)
 end
 
-function draw_turtles_view()
+local function draw_turtles_view()
     term.redirect(monitor)
     clear_content_area()
     
-    -- Collect turtle IDs (unchanged)
     turtles_tab_ids = {}
     for _, turtle in pairs(state.turtles) do
         if turtle.data then table.insert(turtles_tab_ids, turtle.id) end
@@ -681,7 +526,7 @@ function draw_turtles_view()
         return
     end
     
-    draw_turtle_details(turtle, turtle_id, false)
+    draw_turtle_details(turtle, turtle_id)
     draw_turtle_nav_buttons(turtles_tab_selected, #turtles_tab_ids)
     
     draw_label(2, monitor_height, string.format("&0&fTurtle %d&7/&f%d", turtles_tab_selected, #turtles_tab_ids))
@@ -689,11 +534,10 @@ function draw_turtles_view()
     term.redirect(monitor.restore_to)
 end
 
-function draw_stats_view()
+local function draw_stats_view()
     term.redirect(monitor)
     clear_content_area()
 
-    -- Calculate turtle stats (unchanged)
     local turtle_count, active_count, mining_count, idle_count, halt_count, lost_count = 0, 0, 0, 0, 0, 0
     local total_fuel, total_items = 0, 0
     
@@ -712,7 +556,6 @@ function draw_stats_view()
         end
     end
     
-    -- Calculate mine progress (unchanged logic)
     local columns_mined, total_blocks_mined = 0, 0
     local start_y = config.locations.mine_enter.y - 2
     
@@ -733,11 +576,9 @@ function draw_stats_view()
     local avg_depth = columns_mined > 0 and math.floor(total_blocks_mined / columns_mined) or 0
     local progress_pct = math.min(100, math.max(0, area_progress or 0))
 
-    -- DRAW STATS with draw_label
     draw_label(elements.stats_progress_title.x, elements.stats_progress_title.y, 
-        string.format("&0&fProgress: &a%.1f%% &8| &a%d&f/&7%d &8| &f%dr", progress_pct, columns_mined, total_area or 0, config.mining_radius))
+        string.format("&0&fProgress: &a%.1f%% &8| &a%d&f/&7%d &8| &f%dr", progress_pct, columns_mined, total_area or 0, config.mining_radius or 0))
 
-    -- Progress bar (keep as is - special drawing)
     term.setCursorPos(elements.stats_progress_bar.x, elements.stats_progress_bar.y)
     local bar_width = monitor_width - 2
     local filled = math.floor(bar_width * progress_pct / 100)
@@ -761,7 +602,6 @@ function draw_stats_view()
         string.format("&a%d &fActive &8- &6%d &fMining &8- &7%d &fIdle &8- &c%d &fHalted &8- &4%d &fLost", 
             active_count, mining_count, idle_count, halt_count, lost_count))
     
-    -- Resources
     if total_fuel > 0 or total_items > 0 then
         draw_label(elements.stats_resources_title.x, elements.stats_resources_title.y, "&fResources:")
         if total_fuel > 0 then
@@ -784,7 +624,7 @@ end
 -- MAP DRAWING
 -- ============================================================================
 
-function draw_location(location, color)
+local function draw_location(location, color)
     if location then
         local pixel = {
             x = math.floor((location.x - min_location.x) / zoom_factor),
@@ -799,7 +639,7 @@ function draw_location(location, color)
     end
 end
 
-function draw_monitor()
+local function draw_monitor()
     term.redirect(monitor)
     clear_content_area()
 
@@ -901,7 +741,6 @@ function draw_monitor()
     term.setCursorPos(elements.zoom_out.x, elements.zoom_out.y)
     term.write("-")
     
-    term.setBackgroundColor(colors.brown)
     local mined_count = 0
     if state.mined_blocks then
         for _, z_table in pairs(state.mined_blocks) do
@@ -910,7 +749,6 @@ function draw_monitor()
             end
         end
     end
-    term.setCursorPos(elements.mined_indicator.x, elements.mined_indicator.y)
     draw_label(elements.mined_indicator.x, elements.mined_indicator.y, string.format("&b&fMINED: %4d", mined_count))
     draw_label(elements.zoom_indicator.x, elements.zoom_indicator.y, "&b&fZOOM: " .. monitor_zoom_level)
     draw_label(elements.x_indicator.x, elements.x_indicator.y, "&b&fX: " .. monitor_location.x)
@@ -924,7 +762,7 @@ end
 -- TOUCH HANDLING
 -- ============================================================================
 
-function handle_tab_click(x)
+local function handle_tab_click(x)
     local tab_map = {{2, 7, "menu"}, {9, 12, "map"}, {14, 21, "turtles"}, {23, 28, "stats"}}
     for _, t in ipairs(tab_map) do
         if x >= t[1] and x <= t[2] then
@@ -935,7 +773,7 @@ function handle_tab_click(x)
     return false
 end
 
-function touch_monitor(touch)
+local function touch_monitor(touch)
     if touch.y == 1 then
         handle_tab_click(touch.x)
         return
@@ -1041,7 +879,25 @@ function touch_monitor(touch)
         else
             local str_pos = touch.x .. "," .. touch.y
             if turtles[str_pos] then
-                turtle_viewer(turtles[str_pos])
+                -- Get the first turtle ID (or handle multiple)
+                local clicked_turtle_id = turtles[str_pos][1]
+                
+                -- Build turtles_tab_ids list (same as draw_turtles_view does)
+                local temp_tab_ids = {}
+                for _, turtle in pairs(state.turtles) do
+                    if turtle.data then 
+                        table.insert(temp_tab_ids, turtle.id) 
+                    end
+                end
+                
+                -- Find the index of the clicked turtle
+                for i, turtle_id in ipairs(temp_tab_ids) do
+                    if turtle_id == clicked_turtle_id then
+                        turtles_tab_selected = i
+                        current_tab = "turtles"
+                        break
+                    end
+                end
             end
         end
     end
@@ -1051,7 +907,7 @@ end
 -- INITIALIZATION
 -- ============================================================================
 
-function init_elements()
+local function init_elements()
     elements = {
         up = {x = math.ceil(monitor_width / 2), y = 2},
         down = {x = math.ceil(monitor_width / 2), y = monitor_height},
@@ -1065,8 +921,6 @@ function init_elements()
         center_indicator = {x = 2, y = 4},
         x_indicator = {x = 1, y = 2},
         z_indicator = {x = 1, y = 3},
-        version = {x = 2, y = 2},
-        viewer_exit = {x = monitor_width, y = 2},
         turtle_face = {x = 5, y = 2},
         turtle_id = {x = 16, y = 2},
         turtle_version = {x = 4, y = 7},
@@ -1104,20 +958,15 @@ function init_elements()
         stats_progress_title = {x = 2, y = 3},
         stats_progress_bar = {x = 2, y = 4},
         stats_blocks_mined_title = {x = 2, y = 6},
-        stats_blocks_mined_total = {x = 2, y = 7},
         stats_blocks_mined_avg = {x = 2, y = 8},
         stats_turtles_title = {x = 2, y = 10},
         stats_turtles_total = {x = 2, y = 11},
         stats_turtles_active = {x = 2, y = 12},
-        stats_turtles_mining = {x = 2, y = 13},
-        stats_turtles_idle = {x = 2, y = 14},
-        stats_turtles_halted = {x = 2, y = 15},
-        stats_turtles_lost = {x = 2, y = 16},
-        stats_resources_title = {x = 2, y = 18},
-        stats_resources_fuel = {x = 2, y = 19},
-        stats_resources_items = {x = 2, y = 20},
-        stats_version_title = {x = 2, y = 22},
-        stats_version_status = {x = 2, y = 23},
+        stats_resources_title = {x = 2, y = 14},
+        stats_resources_fuel = {x = 2, y = 15},
+        stats_resources_items = {x = 2, y = 16},
+        stats_version_title = {x = 2, y = 18},
+        stats_version_status = {x = 7, y = 18},
     }
 end
 
@@ -1125,7 +974,7 @@ end
 -- MAIN LOOP
 -- ============================================================================
 
-function step()
+local function step()
     while #state.monitor_touches > 0 do
         touch_monitor(table.remove(state.monitor_touches))
     end
@@ -1147,7 +996,7 @@ function step()
     sleep(sleep_len)
 end
 
-function main()
+local function main()
     sleep_len = 0.3
 
     local attached = peripheral.find("monitor")
