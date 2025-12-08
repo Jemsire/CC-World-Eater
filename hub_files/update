@@ -142,27 +142,6 @@ local function format_version(version)
     return nil
 end
 
--- Function to compare two semantic versions
--- Returns: -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
-local function compare_versions(v1, v2)
-    if not v1 or not v2 or type(v1) ~= "table" or type(v2) ~= "table" then
-        return nil
-    end
-    
-    -- Compare major
-    if v1.major > v2.major then return 1 end
-    if v1.major < v2.major then return -1 end
-    
-    -- Compare minor
-    if v1.minor > v2.minor then return 1 end
-    if v1.minor < v2.minor then return -1 end
-    
-    -- Compare hotfix
-    if v1.hotfix > v2.hotfix then return 1 end
-    if v1.hotfix < v2.hotfix then return -1 end
-    
-    return 0  -- Equal
-end
 
 -- Function to get local version
 local function get_local_version()
@@ -234,7 +213,7 @@ print("")
 if local_version then
     -- Check version comparison only in non-dev mode
     if not dev_mode then
-        local comparison = compare_versions(local_version, remote_version)
+        local comparison = github_api.compare_versions(local_version, remote_version)
         if comparison and comparison >= 0 then
             if force_update then
                 print("Force update mode: Updating despite matching versions...")

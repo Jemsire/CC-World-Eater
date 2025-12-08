@@ -1,6 +1,18 @@
 -- CONTINUOUSLY BROADCAST STATUS REPORTS
 hub_id = tonumber(fs.open('/hub_id', 'r').readAll())
 
+-- Load version once at startup
+local turtle_version = nil
+if fs.exists('/version.lua') then
+    local version_func = loadfile('/version.lua')
+    if version_func then
+        local success, version = pcall(version_func)
+        if success and version and type(version) == "table" then
+            turtle_version = version
+        end
+    end
+end
+
 while true do
 
     state.item_count = 0
@@ -29,8 +41,9 @@ while true do
             strip            = state.strip,
             success          = state.success,
             busy             = state.busy,
+            version          = turtle_version,
         }, 'turtle_report')
     
-    sleep(0.5)
+    sleep(1)
     
 end

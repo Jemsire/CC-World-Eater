@@ -14,6 +14,40 @@ while true do
             end
             state.turtles[sender].data = message
             state.turtles[sender].last_update = os.clock()
+            
+            -- Persist version to disk if present
+            if message.version then
+                -- Construct turtles directory path (state.turtles_dir_path may not be set yet if load_mine() hasn't run)
+                local turtles_dir_path = state.turtles_dir_path
+                if not turtles_dir_path and config and config.locations and config.locations.mine_enter then
+                    -- Fallback: construct from config if state not initialized yet
+                    turtles_dir_path = '/mine/' .. config.locations.mine_enter.x .. ',' .. config.locations.mine_enter.z .. '/turtles/'
+                end
+                
+                if turtles_dir_path then
+                    local turtle_dir_path = turtles_dir_path .. sender .. '/'
+                    if not fs.exists(turtle_dir_path) then
+                        fs.makeDir(turtle_dir_path)
+                    end
+                    local version_file = fs.open(turtle_dir_path .. 'version.lua', 'w')
+                    if version_file then
+                        version_file.write('-- Turtle Version\n')
+                        version_file.write('-- Persisted from turtle report\n')
+                        version_file.write('return {\n')
+                        version_file.write('    major = ' .. tostring(message.version.major or 0) .. ',\n')
+                        version_file.write('    minor = ' .. tostring(message.version.minor or 0) .. ',\n')
+                        version_file.write('    hotfix = ' .. tostring(message.version.hotfix or 0) .. ',\n')
+                        if message.version.dev_suffix then
+                            version_file.write('    dev_suffix = "' .. tostring(message.version.dev_suffix) .. '",\n')
+                        end
+                        if message.version.dev ~= nil then
+                            version_file.write('    dev = ' .. tostring(message.version.dev) .. '\n')
+                        end
+                        version_file.write('}\n')
+                        version_file.close()
+                    end
+                end
+            end
         
         elseif protocol == 'pocket_report' then
             if not state.pockets[sender] then

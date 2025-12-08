@@ -3,6 +3,28 @@
 -- Used by update scripts to avoid code duplication
 -- Uses os.loadAPI() style - sets globals
 
+-- Function to compare two semantic versions
+-- Returns: -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2, nil if invalid
+function compare_versions(v1, v2)
+    if not v1 or not v2 or type(v1) ~= "table" or type(v2) ~= "table" then
+        return nil
+    end
+    
+    -- Compare major
+    if v1.major > v2.major then return 1 end
+    if v1.major < v2.major then return -1 end
+    
+    -- Compare minor
+    if v1.minor > v2.minor then return 1 end
+    if v1.minor < v2.minor then return -1 end
+    
+    -- Compare hotfix
+    if v1.hotfix > v2.hotfix then return 1 end
+    if v1.hotfix < v2.hotfix then return -1 end
+    
+    return 0  -- Equal
+end
+
 -- Simple JSON parser for GitHub Trees API response
 function parse_json_simple(json_str)
     -- Extract the tree array from the JSON response
@@ -92,5 +114,30 @@ function get_file_tree(github_repo, github_branch)
     end
     
     return json_data.tree
+end
+
+-- Get the version from the latest GitHub release
+function get_latest_release_version(github_repo)
+    -- Get latest release tag
+    local latest_tag = get_latest_release_tag(github_repo)
+    if not latest_tag then
+        return nil
+    end
+    
+    -- Get version from the release tag's version.lua file
+    local url = "https://raw.githubusercontent.com/" .. github_repo .. "/" .. latest_tag .. "/shared_files/version.lua"
+    local response = http.get(url)
+    if response then
+        local content = response.readAll()
+        response.close()
+        local version_func = load(content)
+        if version_func then
+            local success, version = pcall(version_func)
+            if success and version and type(version) == "table" then
+                return version
+            end
+        end
+    end
+    return nil
 end
 

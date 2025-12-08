@@ -85,6 +85,81 @@ function debug_print(string)
     term.redirect(monitor)
 end
 
+function format_version(version)
+    if not version or type(version) ~= "table" then
+        return "unknown"
+    end
+    local version_str = string.format("%d.%d.%d", version.major or 0, version.minor or 0, version.hotfix or 0)
+    if version.dev_suffix or version.dev then
+        version_str = version_str .. "-DEV"
+    end
+    return version_str
+end
+
+function get_hub_version()
+    if fs.exists('/version.lua') then
+        local version_func = loadfile('/version.lua')
+        if version_func then
+            local success, version = pcall(version_func)
+            if success and version and type(version) == "table" then
+                return version
+            end
+        end
+    end
+    return nil
+end
+
+
+
+-- Cache for GitHub version check (check every 30 seconds)
+local github_version_cache = nil
+local github_version_cache_time = 0
+local GITHUB_CHECK_INTERVAL = 30  -- seconds
+
+function is_hub_up_to_date()
+    local hub_version = get_hub_version()
+    if not hub_version then
+        return false
+    end
+    
+    -- Check cache (only check GitHub every 30 seconds to avoid lag)
+    local current_time = os.clock()
+    if not github_version_cache or (current_time - github_version_cache_time) > GITHUB_CHECK_INTERVAL then
+        if github_api and http then
+            github_version_cache = github_api.get_latest_release_version("Jemsire/CC-World-Eater")
+            github_version_cache_time = current_time
+        else
+            github_version_cache = nil
+        end
+    end
+    
+    if not github_version_cache then
+        return nil  -- Unknown (can't check)
+    end
+    
+    local comparison = github_api.compare_versions(hub_version, github_version_cache)
+    return comparison == 0
+end
+
+function turtle_matches_hub(turtle_version)
+    local hub_version = get_hub_version()
+    if not hub_version or not turtle_version then
+        return false
+    end
+    
+    local comparison = github_api.compare_versions(turtle_version, hub_version)
+    return comparison == 0
+end
+
+function is_turtle_up_to_date(turtle)
+    -- Check if turtle version matches hub version
+    if not turtle or not turtle.data or not turtle.data.version then
+        return nil  -- Unknown (no version data)
+    end
+    
+    return turtle_matches_hub(turtle.data.version)
+end
+
 function turtle_viewer(turtle_ids)
     term.redirect(monitor)
     
@@ -114,6 +189,8 @@ function turtle_viewer(turtle_ids)
                 table.insert(state.user_input, 'clear ' .. turtle_id)
             elseif monitor_touch.x == elements.turtle_reset.x and monitor_touch.y == elements.turtle_reset.y then
                 table.insert(state.user_input, 'reset ' .. turtle_id)
+            elseif monitor_touch.x == elements.turtle_update.x and monitor_touch.y == elements.turtle_update.y then
+                table.insert(state.user_input, 'update ' .. turtle_id)
             elseif monitor_touch.x == elements.turtle_find.x and monitor_touch.y == elements.turtle_find.y then
                 monitor_location.x = turtle.data.location.x
                 monitor_location.z = turtle.data.location.z
@@ -320,11 +397,40 @@ function turtle_viewer(turtle_ids)
         term.setTextColor(colors.green)
         term.write(turtle.data.item_count)
         
---        term.setCursorPos(elements.turtle_data.x, elements.turtle_data.y + 7)
---        term.setTextColor(colors.white)
---        term.write('Dist: ')
---        term.setTextColor(colors.green)
---        term.write(turtle.data.distance)
+        -- Display turtle version with status indicator
+        local turtle_version = turtle.data.version
+        local is_up_to_date = is_turtle_up_to_date(turtle)
+        term.setCursorPos(elements.turtle_version.x, elements.turtle_version.y)
+        
+        -- Status indicator (colored block)
+        if is_up_to_date == true then
+            term.setBackgroundColor(colors.green)
+            term.setTextColor(colors.white)
+            term.write('UP')
+        elseif is_up_to_date == false then
+            term.setBackgroundColor(colors.red)
+            term.setTextColor(colors.white)
+            term.write('OUT')
+        else
+            term.setBackgroundColor(colors.gray)
+            term.setTextColor(colors.white)
+            term.write('UNK')
+        end
+        
+        -- Version text
+        term.setBackgroundColor(colors.black)
+        if is_up_to_date == true then
+            term.setTextColor(colors.green)
+        elseif is_up_to_date == false then
+            term.setTextColor(colors.red)
+        else
+            term.setTextColor(colors.gray)
+        end
+        if turtle_version then
+            term.write(' v' .. format_version(turtle_version))
+        else
+            term.write(' unknown')
+        end
         
         term.setTextColor(colors.white)
         
@@ -532,6 +638,38 @@ function menu()
         term.setCursorPos(elements.menu_suffix.x, elements.menu_suffix.y)
         term.write('.lua')
         
+        -- Display hub version with status indicator
+        local hub_version = get_hub_version()
+        local is_up_to_date = is_hub_up_to_date()
+        term.setCursorPos(elements.menu_version.x, elements.menu_version.y)
+        
+        -- Status indicator (colored block)
+        if is_up_to_date == true then
+            term.setBackgroundColor(colors.green)
+            term.setTextColor(colors.white)
+            term.write('UP')  -- Indicator block
+        elseif is_up_to_date == false then
+            term.setBackgroundColor(colors.red)
+            term.setTextColor(colors.white)
+            term.write('OUT')  -- Indicator block
+        else
+            term.setBackgroundColor(colors.gray)
+            term.setTextColor(colors.white)
+            term.write('UNK')  -- Indicator block
+        end
+        
+        -- Version text
+        term.setBackgroundColor(colors.black)
+        if is_up_to_date == true then
+            term.setTextColor(colors.green)
+        elseif is_up_to_date == false then
+            term.setTextColor(colors.red)
+        else
+            term.setTextColor(colors.gray)
+        end
+        term.write(' v' .. format_version(hub_version))
+
+        term.setTextColor(colors.white)
         term.setBackgroundColor(colors.red)
         term.setCursorPos(elements.viewer_exit.x, elements.viewer_exit.y)
         term.write('x')
@@ -826,6 +964,7 @@ function init_elements()
         version          = {x =  2, y =  1},
         turtle_face      = {x =  5, y =  2},
         turtle_id        = {x = 16, y =  2},
+        turtle_version   = {x = 4, y =  7},
         turtle_lost      = {x = 13, y =  1},
         turtle_data      = {x =  4, y =  8},
         turtle_return    = {x = 26, y =  8},
@@ -845,6 +984,7 @@ function init_elements()
         turtle_dig       = {x = 31, y = 17},
         turtle_dig_down  = {x = 31, y = 18},
         menu_title       = {x =  6, y =  3},
+        menu_version     = {x =  6, y =  9},
         menu_suffix      = {x =  31, y =  9},
         menu_toggle      = {x = 10, y = 11},
         menu_update      = {x = 10, y = 13},

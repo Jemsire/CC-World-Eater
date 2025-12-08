@@ -95,6 +95,21 @@ function load_mine()
             if fs.exists(turtle_dir_path .. 'halt') then
                 turtle.state = 'halt'
             end
+            
+            -- Load persisted version if available
+            if fs.exists(turtle_dir_path .. 'version.lua') then
+                local version_func = loadfile(turtle_dir_path .. 'version.lua')
+                if version_func then
+                    local success, version = pcall(version_func)
+                    if success and version and type(version) == "table" then
+                        -- Initialize data if not present
+                        if not turtle.data then
+                            turtle.data = {}
+                        end
+                        turtle.data.version = version
+                    end
+                end
+            end
         end
     end
 end
