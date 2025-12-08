@@ -29,7 +29,7 @@ jobs:
       - name: Parse version.lua
         id: version
         run: |
-          VF="hub_files/version.lua"
+          VF="shared_files/version.lua"
 
           MAJOR=$(grep -v '^\s*--' "$VF" | grep -E 'major\s*=' | sed -E 's/.*major[[:space:]]*=[[:space:]]*([0-9]+).*/\1/')
           MINOR=$(grep -v '^\s*--' "$VF" | grep -E 'minor\s*=' | sed -E 's/.*minor[[:space:]]*=[[:space:]]*([0-9]+).*/\1/')
