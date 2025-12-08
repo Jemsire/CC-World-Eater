@@ -193,39 +193,119 @@ function draw_movement_button(x, y, symbol, label, enabled)
     term.write("-" .. label)
 end
 
-function draw_version_status(x, y, version, is_up_to_date)
+function parse_and_draw_colored_text(text)
+    -- Parses and draws text with Minecraft-style color codes
+    -- Single code: &a = text color only
+    -- Double code: &a&b = background color (first) + text color (second)
+    -- Special: &t = transparent background (no background set)
+    -- Reset: &r = reset both to defaults
+    
+    local default_text_color = colors.white
+    default_bg_color = nil
+    
+    -- Minecraft color code mapping to ComputerCraft colors
+    local color_codes = {
+        ["0"] = colors.black,
+        ["1"] = colors.blue,
+        ["2"] = colors.green,
+        ["3"] = colors.cyan,
+        ["4"] = colors.red,
+        ["5"] = colors.purple,
+        ["6"] = colors.orange,  -- gold/orange
+        ["7"] = colors.lightGray,
+        ["8"] = colors.gray,
+        ["9"] = colors.lightBlue,
+        ["a"] = colors.lime,   -- bright green
+        ["b"] = colors.brown,    -- aqua
+        ["c"] = colors.pink,
+        ["d"] = colors.magenta, -- light purple
+        ["e"] = colors.yellow,
+        ["f"] = colors.white,
+        ["r"] = default_text_color,  -- reset text color
+        ["t"] = nil  -- transparent background
+    }
+    
+    local current_text_color = default_text_color
+    local current_bg_color = default_bg_color
+    local pos = 1
+    
+    while pos <= #text do
+        if string.sub(text, pos, pos) == "&" and pos < #text then
+            -- Found a color code - check if it's a double code
+            local code1 = string.lower(string.sub(text, pos + 1, pos + 1))
+            
+            -- Check if there's another & code immediately after (double code)
+            if pos + 2 <= #text and string.sub(text, pos + 2, pos + 2) == "&" and pos + 3 <= #text then
+                local code2 = string.lower(string.sub(text, pos + 3, pos + 3))
+                
+                -- Double code: first is background, second is text
+                -- Handle background (first code)
+                if code1 == "t" then
+                    current_bg_color = nil  -- Transparent background
+                elseif code1 == "r" then
+                    current_bg_color = default_bg_color  -- Reset background
+                elseif color_codes[code1] then
+                    current_bg_color = color_codes[code1]
+                end
+                
+                -- Handle text color (second code)
+                if code2 == "r" then
+                    current_text_color = default_text_color
+                elseif color_codes[code2] then
+                    current_text_color = color_codes[code2]
+                end
+                
+                pos = pos + 4  -- Skip both & codes
+            else
+                -- Single code: text color only
+                if code1 == "r" then
+                    -- Reset both
+                    current_text_color = default_text_color
+                elseif color_codes[code1] then
+                    current_text_color = color_codes[code1]
+                end
+                
+                pos = pos + 2  -- Skip the & and the code character
+            end
+        else
+            -- Write the character with current colors
+            if current_bg_color then
+                term.setBackgroundColor(current_bg_color)
+            end
+            term.setTextColor(current_text_color)
+            local char = string.sub(text, pos, pos)
+            term.write(char)
+            pos = pos + 1
+        end
+    end
+end
+
+function draw_label(x, y, text)
+    -- Draws a label with optional color code support
+    -- If text contains & codes, they will be parsed and applied
+    -- Color codes: &a (text), &a&b (bg+text), &t (transparent bg), &r (reset)
+    
     term.setCursorPos(x, y)
     
-    -- Status indicator block
+    -- Parse and draw with initial background color
+    parse_and_draw_colored_text(text)
+end
+
+function draw_version_status(x, y, version, is_up_to_date)
+    local status_text, version_text
+    
     if is_up_to_date == true then
-        term.setBackgroundColor(colors.green)
-        term.setTextColor(colors.white)
-        term.write("UP")
+        status_text = "&2&fUP"
+        version_text = "&0&2 v" .. (version and format_version(version) or "unknown")
     elseif is_up_to_date == false then
-        term.setBackgroundColor(colors.red)
-        term.setTextColor(colors.white)
-        term.write("OUT")
+        status_text = "&4&fOUT"
+        version_text = "&0&c v" .. (version and format_version(version) or "unknown")
     else
-        term.setBackgroundColor(colors.gray)
-        term.setTextColor(colors.white)
-        term.write("UNK")
+        status_text = "&8&fUNK"
+        version_text = "&0&8 " .. (version and "v" .. format_version(version) or "unknown")
     end
     
-    -- Version text
-    term.setBackgroundColor(colors.black)
-    if is_up_to_date == true then
-        term.setTextColor(colors.green)
-    elseif is_up_to_date == false then
-        term.setTextColor(colors.red)
-    else
-        term.setTextColor(colors.gray)
-    end
-    
-    if version then
-        term.write(" v" .. format_version(version))
-    else
-        term.write(" unknown")
-    end
+    draw_label(x, y, status_text .. version_text)
 end
 
 function draw_decimal_id(x, y, id)
@@ -287,21 +367,17 @@ end
 function draw_turtle_data(x, y, turtle)
     local data = turtle.data
     local fields = {
-        {"State: ", turtle.state},
-        {"X: ", data.location and data.location.x or ""},
-        {"Y: ", data.location and data.location.y or ""},
-        {"Z: ", data.location and data.location.z or ""},
-        {"Facing: ", data.orientation},
-        {"Fuel: ", data.fuel_level},
-        {"Items: ", data.item_count}
+        {"&fState: &a", turtle.state},
+        {"&fX: &a", data.location and data.location.x or ""},
+        {"&fY: &a", data.location and data.location.y or ""},
+        {"&fZ: &a", data.location and data.location.z or ""},
+        {"&fFacing: &a", data.orientation},
+        {"&fFuel: &a", data.fuel_level},
+        {"&fItems: &a", data.item_count}
     }
     
     for i, field in ipairs(fields) do
-        term.setCursorPos(x, y + i - 1)
-        term.setTextColor(colors.white)
-        term.write(field[1])
-        term.setTextColor(colors.green)
-        term.write(tostring(field[2]))
+        draw_label(x, y + i - 1, field[1] .. tostring(field[2]))
     end
 end
 
@@ -355,9 +431,7 @@ function draw_turtle_details(turtle, turtle_id, show_exit_button)
     
     -- Connection status
     if turtle.last_update + config.turtle_timeout < os.clock() then
-        term.setCursorPos(elements.turtle_lost.x, elements.turtle_lost.y)
-        term.setTextColor(colors.red)
-        term.write("CONNECTION LOST")
+        draw_label(elements.turtle_lost.x, elements.turtle_lost.y, "&cCONNECTION LOST")
     end
     
     -- Turtle ID
@@ -544,10 +618,9 @@ function draw_menu_content()
     term.redirect(monitor)
     clear_content_area()
 
-    term.setTextColor(colors.white)
-    term.setCursorPos(elements.menu_title.x, elements.menu_title.y)
-    term.write("WORLD")
+    draw_label(elements.menu_title.x, elements.menu_title.y, "&fWORLD")
 
+    -- Keep the pixel art loop as-is (special drawing)
     for y_offset, line in pairs(menu_lines) do
         term.setCursorPos(elements.menu_title.x, elements.menu_title.y + y_offset)
         for char in line:gmatch "." do
@@ -556,41 +629,26 @@ function draw_menu_content()
         end
     end
 
-    term.setCursorPos(elements.menu_title.x, elements.menu_title.y + 1)
-    term.setTextColor(colors.gray)
-    term.write(state.on and "ON" or "OFF")
+    draw_label(elements.menu_title.x, elements.menu_title.y + 1, state.on and "&8ON" or "&8OFF")
 
     term.setBackgroundColor(colors.black)
-    term.setCursorPos(elements.menu_suffix.x, elements.menu_suffix.y)
-    term.write(".lua")
+    draw_label(elements.menu_suffix.x, elements.menu_suffix.y, "&f.lua")
 
     draw_version_status(elements.menu_version.x, elements.menu_version.y, get_hub_version(), is_hub_up_to_date())
 
-    -- Hub Controls Section
-    term.setBackgroundColor(colors.black)
-    term.setTextColor(colors.white)
-    term.setCursorPos(elements.menu_hub_section.x, elements.menu_hub_section.y)
-    term.write("HUB:")
-
+    draw_label(elements.menu_hub_section.x, elements.menu_hub_section.y, "&0&fHUB:")
     draw_button(elements.menu_toggle.x, elements.menu_toggle.y, "TOGGLE POWER")
     draw_button(elements.menu_hub_update.x, elements.menu_hub_update.y, "UPDATE HUB")
 
-    -- Turtle Commands Section
-    term.setBackgroundColor(colors.black)
-    term.setTextColor(colors.white)
-    term.setCursorPos(elements.menu_turtle_section.x, elements.menu_turtle_section.y)
-    term.write("TURTLES:")
+    draw_label(elements.menu_turtle_section.x, elements.menu_turtle_section.y, "&0&fTURTLES:")
 
     local turtle_buttons = {
-        {elements.menu_return.x, elements.menu_return.y, "RETURN"},
-        {elements.menu_update.x, elements.menu_update.y, "UPDATE"},
-        {elements.menu_reboot.x, elements.menu_reboot.y, "REBOOT"},
-        {elements.menu_halt.x, elements.menu_halt.y, "HALT"},
-        {elements.menu_clear.x, elements.menu_clear.y, "CLEAR"},
-        {elements.menu_reset.x, elements.menu_reset.y, "RESET"},
+        {elements.menu_return, "RETURN"}, {elements.menu_update, "UPDATE"},
+        {elements.menu_reboot, "REBOOT"}, {elements.menu_halt, "HALT"},
+        {elements.menu_clear, "CLEAR"}, {elements.menu_reset, "RESET"},
     }
     for _, btn in ipairs(turtle_buttons) do
-        draw_button_right(btn[1], btn[2], btn[3])
+        draw_button_right(btn[1].x, btn[1].y, btn[2])
     end
 
     term.redirect(monitor.restore_to)
@@ -600,33 +658,25 @@ function draw_turtles_view()
     term.redirect(monitor)
     clear_content_area()
     
-    -- Collect turtle IDs
+    -- Collect turtle IDs (unchanged)
     turtles_tab_ids = {}
     for _, turtle in pairs(state.turtles) do
-        if turtle.data then
-            table.insert(turtles_tab_ids, turtle.id)
-        end
+        if turtle.data then table.insert(turtles_tab_ids, turtle.id) end
     end
     
     if #turtles_tab_ids == 0 then
-        term.setTextColor(colors.white)
-        term.setCursorPos(2, 2)
-        term.write("No turtles found")
+        draw_label(2, 2, "&fNo turtles found")
         term.redirect(monitor.restore_to)
         return
     end
     
-    if turtles_tab_selected > #turtles_tab_ids then
-        turtles_tab_selected = 1
-    end
+    if turtles_tab_selected > #turtles_tab_ids then turtles_tab_selected = 1 end
     
     local turtle_id = turtles_tab_ids[turtles_tab_selected]
     local turtle = state.turtles[turtle_id]
     
     if not turtle or not turtle.data then
-        term.setTextColor(colors.white)
-        term.setCursorPos(2, 2)
-        term.write("Turtle data not available")
+        draw_label(2, 2, "&fTurtle data not available")
         term.redirect(monitor.restore_to)
         return
     end
@@ -634,11 +684,7 @@ function draw_turtles_view()
     draw_turtle_details(turtle, turtle_id, false)
     draw_turtle_nav_buttons(turtles_tab_selected, #turtles_tab_ids)
     
-    -- Turtle selector info
-    term.setCursorPos(2, monitor_height)
-    term.setTextColor(colors.white)
-    term.setBackgroundColor(colors.black)
-    term.write("Turtle " .. turtles_tab_selected .. "/" .. #turtles_tab_ids)
+    draw_label(2, monitor_height, string.format("&0&fTurtle %d&7/&f%d", turtles_tab_selected, #turtles_tab_ids))
     
     term.redirect(monitor.restore_to)
 end
@@ -647,62 +693,89 @@ function draw_stats_view()
     term.redirect(monitor)
     clear_content_area()
 
-    term.setTextColor(colors.white)
-    term.setCursorPos(2, 2)
-    term.write("STATISTICS")
-    term.setCursorPos(2, 3)
-    term.write("==========")
-
-    local turtle_count, active_count, mining_count, idle_count, halt_count = 0, 0, 0, 0, 0
+    -- Calculate turtle stats (unchanged)
+    local turtle_count, active_count, mining_count, idle_count, halt_count, lost_count = 0, 0, 0, 0, 0, 0
+    local total_fuel, total_items = 0, 0
     
     for _, turtle in pairs(state.turtles) do
         if turtle.data then
             turtle_count = turtle_count + 1
-            if turtle.state == "halt" then
-                halt_count = halt_count + 1
-            elseif turtle.state == "idle" then
-                idle_count = idle_count + 1
-            else
-                active_count = active_count + 1
+            if turtle.state == "halt" then halt_count = halt_count + 1
+            elseif turtle.state == "idle" then idle_count = idle_count + 1
+            elseif turtle.state == "lost" then lost_count = lost_count + 1
+            else active_count = active_count + 1 end
+            if turtle.data.turtle_type == "mining" then mining_count = mining_count + 1 end
+            if turtle.data.fuel_level and turtle.data.fuel_level ~= "unlimited" then
+                total_fuel = total_fuel + turtle.data.fuel_level
             end
-            if turtle.data.turtle_type == "mining" then
-                mining_count = mining_count + 1
+            if turtle.data.item_count then total_items = total_items + turtle.data.item_count end
+        end
+    end
+    
+    -- Calculate mine progress (unchanged logic)
+    local columns_mined, total_blocks_mined = 0, 0
+    local start_y = config.locations.mine_enter.y - 2
+    
+    if state.mine and state.mine.columns then
+        for _, column in pairs(state.mine.columns) do
+            if column and column.current_y then
+                columns_mined = columns_mined + 1
+                total_blocks_mined = total_blocks_mined + math.max(0, start_y - column.current_y)
             end
         end
     end
     
-    local mined_count = 0
-    if state.mined_blocks then
-        for _, z_table in pairs(state.mined_blocks) do
-            for _, _ in pairs(z_table) do
-                mined_count = mined_count + 1
-            end
-        end
+    local total_area, area_progress = nil, nil
+    if config.mining_radius then
+        total_area = math.floor(math.pi * config.mining_radius * config.mining_radius)
+        area_progress = total_area > 0 and (columns_mined / total_area * 100) or 0
     end
+    local avg_depth = columns_mined > 0 and math.floor(total_blocks_mined / columns_mined) or 0
+    local progress_pct = math.min(100, math.max(0, area_progress or 0))
 
-    local stats = {
-        "Total Turtles: " .. turtle_count,
-        "Active Turtles: " .. active_count,
-        "Idle Turtles: " .. idle_count,
-        "Halted Turtles: " .. halt_count,
-        "Mining Turtles: " .. mining_count,
-        "Blocks Mined: " .. mined_count,
-    }
+    -- DRAW STATS with draw_label
+    draw_label(elements.stats_progress_title.x, elements.stats_progress_title.y, 
+        string.format("&0&fProgress: &a%.1f%% &8| &a%d&f/&7%d &8| &f%dr", progress_pct, columns_mined, total_area or 0, config.mining_radius))
+
+    -- Progress bar (keep as is - special drawing)
+    term.setCursorPos(elements.stats_progress_bar.x, elements.stats_progress_bar.y)
+    local bar_width = monitor_width - 2
+    local filled = math.floor(bar_width * progress_pct / 100)
+    term.setBackgroundColor(colors.lime)
+    term.write(string.rep(" ", filled))
+    term.setBackgroundColor(colors.gray)
+    term.write(string.rep(" ", bar_width - filled))
     
-    for i, stat in ipairs(stats) do
-        term.setCursorPos(2, 3 + i)
-        term.write(stat)
+    draw_label(elements.stats_blocks_mined_title.x, elements.stats_blocks_mined_title.y, 
+        string.format("&fBlocks Mined: &e%d", total_blocks_mined))
+    
+    draw_label(elements.stats_blocks_mined_avg.x, elements.stats_blocks_mined_avg.y, 
+        string.format("&fAvg Depth: &b%d &fblocks", avg_depth))
+    
+    draw_label(elements.stats_turtles_title.x, elements.stats_turtles_title.y, "&fTurtles:")
+    
+    draw_label(elements.stats_turtles_total.x, elements.stats_turtles_total.y, 
+        string.format("&e%d &fTotal", turtle_count))
+    
+    draw_label(elements.stats_turtles_active.x, elements.stats_turtles_active.y, 
+        string.format("&a%d &fActive &8- &6%d &fMining &8- &7%d &fIdle &8- &c%d &fHalted &8- &4%d &fLost", 
+            active_count, mining_count, idle_count, halt_count, lost_count))
+    
+    -- Resources
+    if total_fuel > 0 or total_items > 0 then
+        draw_label(elements.stats_resources_title.x, elements.stats_resources_title.y, "&fResources:")
+        if total_fuel > 0 then
+            draw_label(elements.stats_resources_fuel.x, elements.stats_resources_fuel.y, 
+                "&6Total Fuel: &f" .. total_fuel)
+        end
+        if total_items > 0 then
+            draw_label(elements.stats_resources_items.x, elements.stats_resources_items.y, 
+                "&bTotal Items: &f" .. total_items)
+        end
     end
     
-    term.setCursorPos(2, 11)
-    term.write("System Status: ")
-    term.setTextColor(state.on and colors.green or colors.red)
-    term.write(state.on and "ON" or "OFF")
-    term.setTextColor(colors.white)
-    
-    term.setCursorPos(2, 13)
-    term.write("Hub Version: ")
-    draw_version_status(15, 13, get_hub_version(), is_hub_up_to_date())
+    draw_label(elements.stats_version_title.x, elements.stats_version_title.y, "&fHub: ")
+    draw_version_status(elements.stats_version_status.x, elements.stats_version_status.y, get_hub_version(), is_hub_up_to_date())
 
     term.redirect(monitor.restore_to)
 end
@@ -838,15 +911,11 @@ function draw_monitor()
         end
     end
     term.setCursorPos(elements.mined_indicator.x, elements.mined_indicator.y)
-    term.write(string.format("MINED: %4d", mined_count))
-    term.setCursorPos(elements.zoom_indicator.x, elements.zoom_indicator.y)
-    term.write("ZOOM: " .. monitor_zoom_level)
-    term.setCursorPos(elements.x_indicator.x, elements.x_indicator.y)
-    term.write("X: " .. monitor_location.x)
-    term.setCursorPos(elements.z_indicator.x, elements.z_indicator.y)
-    term.write("Z: " .. monitor_location.z)
-    term.setCursorPos(elements.center_indicator.x, elements.center_indicator.y)
-    term.write("-CENTER")
+    draw_label(elements.mined_indicator.x, elements.mined_indicator.y, string.format("&b&fMINED: %4d", mined_count))
+    draw_label(elements.zoom_indicator.x, elements.zoom_indicator.y, "&b&fZOOM: " .. monitor_zoom_level)
+    draw_label(elements.x_indicator.x, elements.x_indicator.y, "&b&fX: " .. monitor_location.x)
+    draw_label(elements.z_indicator.x, elements.z_indicator.y, "&b&fZ: " .. monitor_location.z)
+    draw_label(elements.center_indicator.x, elements.center_indicator.y, "&b&f-CENTER")
 
     term.redirect(monitor.restore_to)
 end
@@ -1032,6 +1101,23 @@ function init_elements()
         menu_halt = {x = 33, y = 16},
         menu_clear = {x = 33, y = 17},
         menu_reset = {x = 33, y = 18},
+        stats_progress_title = {x = 2, y = 3},
+        stats_progress_bar = {x = 2, y = 4},
+        stats_blocks_mined_title = {x = 2, y = 6},
+        stats_blocks_mined_total = {x = 2, y = 7},
+        stats_blocks_mined_avg = {x = 2, y = 8},
+        stats_turtles_title = {x = 2, y = 10},
+        stats_turtles_total = {x = 2, y = 11},
+        stats_turtles_active = {x = 2, y = 12},
+        stats_turtles_mining = {x = 2, y = 13},
+        stats_turtles_idle = {x = 2, y = 14},
+        stats_turtles_halted = {x = 2, y = 15},
+        stats_turtles_lost = {x = 2, y = 16},
+        stats_resources_title = {x = 2, y = 18},
+        stats_resources_fuel = {x = 2, y = 19},
+        stats_resources_items = {x = 2, y = 20},
+        stats_version_title = {x = 2, y = 22},
+        stats_version_status = {x = 2, y = 23},
     }
 end
 
