@@ -28,8 +28,8 @@ function compare_versions(v1, v2)
     -- If numeric versions are equal, compare dev status
     -- DEV versions are considered "greater than" release versions
     -- because DEV = that version + additional commits
-    local v1_is_dev = v1.dev == true or v1.dev_suffix == "-DEV"
-    local v2_is_dev = v2.dev == true or v2.dev_suffix == "-DEV"
+    local v1_is_dev = v1.dev == true
+    local v2_is_dev = v2.dev == true
     
     if v1_is_dev and not v2_is_dev then
         return 1   -- v1 is dev, v2 is release: v1 > v2 (dev has more commits)

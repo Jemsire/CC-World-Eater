@@ -109,8 +109,6 @@ function get_hub_version()
     return nil
 end
 
-
-
 -- Cache for GitHub version check (only checked once on startup)
 local github_version_cache = nil
 
@@ -126,7 +124,9 @@ function is_hub_up_to_date()
     end
     
     local comparison = github_api.compare_versions(hub_version, github_version_cache)
-    return comparison == 0
+    -- Hub is up to date if versions are equal (comparison == 0)
+    -- Or if hub is newer (comparison > 0)
+    return comparison >= 0
 end
 
 function turtle_matches_hub(turtle_version)
@@ -584,6 +584,8 @@ function menu()
                 else
                     table.insert(state.user_input, 'on')
                 end
+            elseif monitor_touch.x == elements.menu_hub_update.x and monitor_touch.y == elements.menu_hub_update.y then
+                table.insert(state.user_input, 'hubupdate')
             elseif monitor_touch.x == elements.menu_update.x and monitor_touch.y == elements.menu_update.y then
                 table.insert(state.user_input, 'update')
             elseif monitor_touch.x == elements.menu_return.x and monitor_touch.y == elements.menu_return.y then
@@ -621,6 +623,16 @@ function menu()
                 term.write(' ')
             end
         end
+
+        term.setCursorPos(elements.menu_title.x, elements.menu_title.y + 1)
+        term.setTextColor(colors.gray)
+        if state.on then
+            term.write('ON')
+        else
+            term.write('OFF')
+        end
+        
+
         
         term.setBackgroundColor(colors.black)
         term.setCursorPos(elements.menu_suffix.x, elements.menu_suffix.y)
@@ -661,9 +673,48 @@ function menu()
         term.setBackgroundColor(colors.red)
         term.setCursorPos(elements.viewer_exit.x, elements.viewer_exit.y)
         term.write('x')
+
+        -- Hub Controls Section (Left Side)
+        term.setBackgroundColor(colors.black)
+        term.setTextColor(colors.white)
+        term.setCursorPos(elements.menu_hub_section.x, elements.menu_hub_section.y)
+        term.write('HUB:')
+        
+        term.setTextColor(colors.white)
         term.setBackgroundColor(colors.green)
         term.setCursorPos(elements.menu_toggle.x, elements.menu_toggle.y)
         term.write('*')
+        term.setCursorPos(elements.menu_hub_update.x, elements.menu_hub_update.y)
+        term.write('*')
+        term.setBackgroundColor(colors.brown)
+        term.setCursorPos(elements.menu_toggle.x + 1, elements.menu_toggle.y)
+        term.write('-TOGGLE POWER')
+        term.setCursorPos(elements.menu_hub_update.x + 1, elements.menu_hub_update.y)
+        term.write('-UPDATE HUB')
+        
+        -- Turtle Commands Section (Right Side) - Right-aligned with text on left
+        term.setBackgroundColor(colors.black)
+        term.setTextColor(colors.white)
+        term.setCursorPos(elements.menu_turtle_section.x, elements.menu_turtle_section.y)
+        term.write('TURTLES:')
+        
+        term.setBackgroundColor(colors.brown)
+        term.setTextColor(colors.white)
+        -- Text on left, button on right (flipped from hub controls)
+        term.setCursorPos(elements.menu_return_text.x, elements.menu_return.y)
+        term.write('RETURN-')
+        term.setCursorPos(elements.menu_update_text.x, elements.menu_update.y)
+        term.write('UPDATE-')
+        term.setCursorPos(elements.menu_reboot_text.x, elements.menu_reboot.y)
+        term.write('REBOOT-')
+        term.setCursorPos(elements.menu_halt_text.x, elements.menu_halt.y)
+        term.write('HALT-')
+        term.setCursorPos(elements.menu_clear_text.x, elements.menu_clear.y)
+        term.write('CLEAR-')
+        term.setCursorPos(elements.menu_reset_text.x, elements.menu_reset.y)
+        term.write('RESET-')
+        
+        term.setBackgroundColor(colors.green)
         term.setCursorPos(elements.menu_return.x, elements.menu_return.y)
         term.write('*')
         term.setCursorPos(elements.menu_update.x, elements.menu_update.y)
@@ -676,21 +727,6 @@ function menu()
         term.write('*')
         term.setCursorPos(elements.menu_reset.x, elements.menu_reset.y)
         term.write('*')
-        term.setBackgroundColor(colors.brown)
-        term.setCursorPos(elements.menu_toggle.x + 1, elements.menu_toggle.y)
-        term.write('-TOGGLE POWER')
-        term.setCursorPos(elements.menu_update.x + 1, elements.menu_update.y)
-        term.write('-UPDATE')
-        term.setCursorPos(elements.menu_return.x + 1, elements.menu_return.y)
-        term.write('-RETURN')
-        term.setCursorPos(elements.menu_reboot.x + 1, elements.menu_reboot.y)
-        term.write('-REBOOT')
-        term.setCursorPos(elements.menu_halt.x + 1, elements.menu_halt.y)
-        term.write('-HALT')
-        term.setCursorPos(elements.menu_clear.x + 1, elements.menu_clear.y)
-        term.write('-CLEAR')
-        term.setCursorPos(elements.menu_reset.x + 1, elements.menu_reset.y)
-        term.write('-RESET')
         
         monitor.setVisible(true)
         monitor.setVisible(false)
@@ -974,13 +1010,22 @@ function init_elements()
         menu_title       = {x =  6, y =  3},
         menu_version     = {x =  6, y =  9},
         menu_suffix      = {x =  31, y =  9},
-        menu_toggle      = {x = 10, y = 11},
-        menu_update      = {x = 10, y = 13},
-        menu_return      = {x = 10, y = 14},
-        menu_reboot      = {x = 10, y = 15},
-        menu_halt        = {x = 10, y = 16},
-        menu_clear       = {x = 10, y = 17},
-        menu_reset       = {x = 10, y = 18},
+        menu_hub_section = {x =  6, y = 11},
+        menu_toggle      = {x =  6, y = 12},
+        menu_hub_update  = {x =  6, y = 13},
+        menu_turtle_section = {x = 27, y = 11},
+        menu_return      = {x = 33, y = 12},  -- Button on right
+        menu_return_text = {x = 26, y = 12},  -- Text on left
+        menu_update      = {x = 33, y = 13},  -- Button on right
+        menu_update_text = {x = 26, y = 13},  -- Text on left (longer text)
+        menu_reboot      = {x = 33, y = 14},  -- Button on right
+        menu_reboot_text = {x = 26, y = 14},  -- Text on left
+        menu_halt        = {x = 33, y = 15},  -- Button on right
+        menu_halt_text   = {x = 28, y = 15},  -- Text on left
+        menu_clear       = {x = 33, y = 16},  -- Button on right
+        menu_clear_text  = {x = 27, y = 16},  -- Text on left
+        menu_reset       = {x = 33, y = 17},  -- Button on right
+        menu_reset_text  = {x = 27, y = 17},  -- Text on left
         menu_statistics  = {x = 10, y = 19},
     }
 end
