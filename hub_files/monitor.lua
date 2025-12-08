@@ -1356,12 +1356,6 @@ function draw_monitor()
 
     term.setTextColor(colors.white)
     term.setBackgroundColor(colors.green)
-    term.setCursorPos(elements.menu.x, elements.menu.y)
-    term.write("*")
-    term.setCursorPos(elements.all_turtles.x, elements.all_turtles.y)
-    term.write("*")
-    term.setCursorPos(elements.mining_turtles.x, elements.mining_turtles.y)
-    term.write("*")
     term.setCursorPos(elements.center.x, elements.center.y)
     term.write("*")
     term.setCursorPos(elements.up.x, elements.up.y)
@@ -1395,12 +1389,6 @@ function draw_monitor()
     term.write("Z: " .. monitor_location.z)
     term.setCursorPos(elements.center_indicator.x, elements.center_indicator.y)
     term.write("-CENTER")
-    term.setCursorPos(elements.menu_indicator.x, elements.menu_indicator.y)
-    term.write("-MENU")
-    term.setCursorPos(elements.all_indicator.x, elements.all_indicator.y)
-    term.write("ALL-")
-    term.setCursorPos(elements.mining_indicator.x, elements.mining_indicator.y)
-    term.write("MINING-")
 
     term.redirect(monitor.restore_to)
 end
@@ -1601,30 +1589,8 @@ function touch_monitor(monitor_touch)
         monitor_zoom_level = math.max(monitor_zoom_level - 1, 0)
     elseif monitor_touch.x == elements.zoom_out.x and monitor_touch.y == elements.zoom_out.y then
         monitor_zoom_level = math.min(monitor_zoom_level + 1, config.monitor_max_zoom_level)
-    elseif monitor_touch.x == elements.menu.x and monitor_touch.y == elements.menu.y then
-        current_tab = "menu"
     elseif monitor_touch.x == elements.center.x and monitor_touch.y == elements.center.y then
         monitor_location = {x = config.default_monitor_location.x, z = config.default_monitor_location.z}
-    elseif monitor_touch.x == elements.all_turtles.x and monitor_touch.y == elements.all_turtles.y then
-        local turtle_ids = {}
-        for _, turtle in pairs(state.turtles) do
-            if turtle.data then
-                table.insert(turtle_ids, turtle.id)
-            end
-        end
-        if #turtle_ids then
-            turtle_viewer(turtle_ids)
-        end
-    elseif monitor_touch.x == elements.mining_turtles.x and monitor_touch.y == elements.mining_turtles.y then
-        local turtle_ids = {}
-        for _, turtle in pairs(state.turtles) do
-            if turtle.data and turtle.data.turtle_type == "mining" then
-                table.insert(turtle_ids, turtle.id)
-            end
-        end
-        if #turtle_ids then
-            turtle_viewer(turtle_ids)
-        end
     else
         local str_pos = monitor_touch.x .. "," .. monitor_touch.y
         if turtles[str_pos] then
@@ -1642,19 +1608,13 @@ function init_elements()
         level_up = {x = monitor_width, y = 3}, -- Shifted down 2 lines
         level_down = {x = monitor_width - 11, y = 3}, -- Shifted down 2 lines
         level_indicator = {x = monitor_width - 10, y = 3}, -- Shifted down 2 lines
-        zoom_in = {x = monitor_width, y = 4}, -- Shifted down 2 lines
-        zoom_out = {x = monitor_width - 8, y = 4}, -- Shifted down 2 lines
-        zoom_indicator = {x = monitor_width - 7, y = 4}, -- Shifted down 2 lines
-        all_turtles = {x = monitor_width, y = monitor_height - 1},
-        all_indicator = {x = monitor_width - 4, y = monitor_height - 1},
-        mining_turtles = {x = monitor_width, y = monitor_height},
-        mining_indicator = {x = monitor_width - 7, y = monitor_height},
-        menu = {x = 1, y = monitor_height},
-        menu_indicator = {x = 2, y = monitor_height},
-        center = {x = 1, y = 2}, -- Shifted down 2 lines
-        center_indicator = {x = 2, y = 2}, -- Shifted down 2 lines
-        x_indicator = {x = 1, y = 3}, -- Shifted down 2 lines
-        z_indicator = {x = 1, y = 4}, -- Shifted down 2 lines
+        zoom_in = {x = monitor_width, y = 2}, -- Shifted down 2 lines
+        zoom_out = {x = monitor_width - 8, y = 2}, -- Shifted down 2 lines
+        zoom_indicator = {x = monitor_width - 7, y = 2}, -- Shifted down 2 lines
+        center = {x = 1, y = 4}, -- Shifted down 2 lines
+        center_indicator = {x = 2, y = 4}, -- Shifted down 2 lines
+        x_indicator = {x = 1, y = 2}, -- Shifted down 2 lines
+        z_indicator = {x = 1, y = 3}, -- Shifted down 2 lines
         version = {x = 2, y = 2}, -- Shifted down 2 lines
         turtle_face = {x = 5, y = 2}, -- Shifted down 2 lines
         turtle_id = {x = 16, y = 2}, -- Shifted down 2 lines
