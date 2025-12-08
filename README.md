@@ -161,17 +161,17 @@ Configure in `dig_disallow` table in `hub_files/config.lua`.
 
 ## 📸 Screenshots
 
-![Main Screen](assets/images/main-screen.png)
-```Main mining screen to show whats complete and whats not.```
+![Main Menu](assets/images/main-menu.png)
+```Main menu allows you to mass send commands to turtles and turn the system on or off.```
 
-![Turtle View](assets/images/turtle-menu.png)
+![Map Screen](assets/images/map-screen.png)
+```View the progress and position of your turtles.```
+
+![Turtle View](assets/images/turtle-screen.png)
 ```View each turtle individually for debugging or controlling manually.```
 
 ![Auto Updater](assets/images/auto-update.png)
 ```Auto updater that grabs from github for latest updates easily!```
-
-![Settings Menu](assets/images/computer-setup.png)
-```Settings menu allows you to mass send commands to turtles and turn it on or off.```
 
 ## 🎮 User Commands
 
