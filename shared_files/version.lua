@@ -6,7 +6,7 @@
 return {
     major = 0,
     minor = 3,
-    hotfix = 2,
+    hotfix = 3,
     dev_suffix = "-DEV",
     dev = false
 }
