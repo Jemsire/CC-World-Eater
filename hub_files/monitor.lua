@@ -1,5 +1,3 @@
--- APIs are loaded by startup.lua - this file uses globals from there
-
 menu_lines = {
     '##### ##### ##### ##### #####',
     '#     #   #   #   #     #   #',
@@ -178,41 +176,6 @@ function turtle_viewer(turtle_ids)
             x_position = x_position + 6
         end
         
-        -- Display turtle version below turtle ID
-        term.setCursorPos(elements.turtle_id.x, elements.turtle_id.y + 5)
-        term.setBackgroundColor(colors.black)
-        term.setTextColor(colors.white)
-        term.write('Version: ')
-        if turtle.data.version then
-            local turtle_version_str = format_version(turtle.data.version)
-            if turtle_version_str then
-                -- Check if turtle version is out of date compared to hub
-                local hub_version = get_version()
-                local is_out_of_date = false
-                if hub_version and turtle.data.version then
-                    -- Compare versions (simple comparison)
-                    if turtle.data.version.major < hub_version.major or
-                       (turtle.data.version.major == hub_version.major and turtle.data.version.minor < hub_version.minor) or
-                       (turtle.data.version.major == hub_version.major and turtle.data.version.minor == hub_version.minor and turtle.data.version.hotfix < hub_version.hotfix) then
-                        is_out_of_date = true
-                    end
-                end
-                
-                if is_out_of_date then
-                    term.setTextColor(colors.red)
-                else
-                    term.setTextColor(colors.yellow)
-                end
-                term.write('v' .. turtle_version_str)
-            else
-                term.setTextColor(colors.gray)
-                term.write('unknown')
-            end
-        else
-            term.setTextColor(colors.gray)
-            term.write('unknown')
-        end
-        
         term.setCursorPos(elements.turtle_face.x + 1, elements.turtle_face.y)
         term.setBackgroundColor(colors.yellow)
         term.write('       ')
@@ -351,6 +314,18 @@ function turtle_viewer(turtle_ids)
         term.setTextColor(colors.green)
         term.write(turtle.data.fuel_level)
         
+        term.setCursorPos(elements.turtle_data.x, elements.turtle_data.y + 6)
+        term.setTextColor(colors.white)
+        term.write('Items: ')
+        term.setTextColor(colors.green)
+        term.write(turtle.data.item_count)
+        
+--        term.setCursorPos(elements.turtle_data.x, elements.turtle_data.y + 7)
+--        term.setTextColor(colors.white)
+--        term.write('Dist: ')
+--        term.setTextColor(colors.green)
+--        term.write(turtle.data.distance)
+        
         term.setTextColor(colors.white)
         
         term.setCursorPos(elements.turtle_return.x, elements.turtle_return.y)
@@ -358,6 +333,12 @@ function turtle_viewer(turtle_ids)
         term.write('*')
         term.setBackgroundColor(colors.brown)
         term.write('-RETURN')
+        
+        term.setCursorPos(elements.turtle_update.x, elements.turtle_update.y)
+        term.setBackgroundColor(colors.green)
+        term.write('*')
+        term.setBackgroundColor(colors.brown)
+        term.write('-UPDATE')
         
         term.setCursorPos(elements.turtle_reboot.x, elements.turtle_reboot.y)
         term.setBackgroundColor(colors.green)
@@ -494,337 +475,6 @@ function turtle_viewer(turtle_ids)
 end
 
 
-function statistics_viewer()
-    term.redirect(monitor)
-    
-    local selected_turtle = 1
-    local turtle_ids = {}
-    local scroll_offset = 0
-    local max_display = 15  -- Increased from 10
-    
-    -- Collect only mining turtle IDs (exclude chunk turtles)
-    for _, turtle in pairs(state.turtles) do
-        if turtle.data and turtle.data.turtle_type == 'mining' then
-            table.insert(turtle_ids, turtle.id)
-        end
-    end
-    
-    table.sort(turtle_ids)
-    
-    while true do
-        -- Handle monitor touches
-        while #state.monitor_touches > 0 do
-            local monitor_touch = table.remove(state.monitor_touches)
-            local nav_y = monitor_height
-            
-            -- Exit button (top-left or bottom-right)
-            if (monitor_touch.x == elements.viewer_exit.x and monitor_touch.y == elements.viewer_exit.y) or
-               (monitor_touch.x >= monitor_width - 3 and monitor_touch.x <= monitor_width and monitor_touch.y == nav_y) then
-                return
-            -- Previous turtle button (<)
-            elseif monitor_touch.x == 1 and monitor_touch.y == nav_y then
-                selected_turtle = math.max(selected_turtle - 1, 1)
-                if selected_turtle <= scroll_offset then
-                    scroll_offset = math.max(selected_turtle - 1, 0)
-                end
-            -- Next turtle button (>)
-            elseif monitor_touch.x == 8 and monitor_touch.y == nav_y then
-                selected_turtle = math.min(selected_turtle + 1, #turtle_ids)
-                if selected_turtle > scroll_offset + max_display then
-                    scroll_offset = selected_turtle - max_display
-                end
-            -- Scroll up button (^)
-            elseif monitor_touch.x == 16 and monitor_touch.y == nav_y then
-                scroll_offset = math.max(scroll_offset - 1, 0)
-                if selected_turtle > scroll_offset + max_display then
-                    selected_turtle = math.min(selected_turtle, scroll_offset + max_display)
-                end
-            -- Scroll down button (v)
-            elseif monitor_touch.x == 22 and monitor_touch.y == nav_y then
-                scroll_offset = math.min(scroll_offset + 1, math.max(0, #turtle_ids - max_display))
-                if selected_turtle <= scroll_offset then
-                    selected_turtle = math.min(selected_turtle, scroll_offset + 1)
-                end
-            end
-        end
-        
-        background_color = colors.black
-        term.setBackgroundColor(background_color)
-        monitor.clear()
-        
-        -- Title (offset to avoid exit button)
-        term.setCursorPos(2, 1)
-        term.setTextColor(colors.white)
-        term.setBackgroundColor(colors.green)
-        term.write('STATISTICS')
-        term.setBackgroundColor(background_color)
-        
-        -- Exit button (top-left)
-        term.setBackgroundColor(colors.red)
-        term.setCursorPos(elements.viewer_exit.x, elements.viewer_exit.y)
-        term.write('x')
-        term.setBackgroundColor(background_color)
-        
-        -- Calculate aggregate statistics (only mining turtles)
-        local total_blocks = 0
-        local total_ores = 0
-        local aggregate_ore_counts = {}
-        local mining_turtle_count = 0
-        
-        for _, turtle_id in pairs(turtle_ids) do
-            local turtle = state.turtles[turtle_id]
-            if turtle.data and turtle.data.turtle_type == 'mining' then
-                mining_turtle_count = mining_turtle_count + 1
-                if turtle.data.statistics then
-                    total_blocks = total_blocks + (turtle.data.statistics.blocks_mined or 0)
-                    total_ores = total_ores + (turtle.data.statistics.ores_mined or 0)
-                    if turtle.data.statistics.ore_counts then
-                        for ore_name, count in pairs(turtle.data.statistics.ore_counts) do
-                            aggregate_ore_counts[ore_name] = (aggregate_ore_counts[ore_name] or 0) + count
-                        end
-                    end
-                end
-            end
-        end
-        
-        -- Display aggregate stats with better formatting
-        term.setCursorPos(1, 2)
-        term.setTextColor(colors.yellow)
-        term.write('Mining Turtles: ')
-        term.setTextColor(colors.green)
-        term.write(mining_turtle_count)
-        
-        term.setCursorPos(25, 2)
-        term.setTextColor(colors.yellow)
-        term.write('Total Blocks: ')
-        term.setTextColor(colors.green)
-        term.write(string.format("%8d", total_blocks))
-        
-        term.setCursorPos(1, 3)
-        term.setTextColor(colors.yellow)
-        term.write('Total Ores Mined: ')
-        term.setTextColor(colors.green)
-        term.write(string.format("%8d", total_ores))
-        
-        -- Display top ores with better formatting
-        local top_ores = {}
-        for ore_name, count in pairs(aggregate_ore_counts) do
-            table.insert(top_ores, {name = ore_name, count = count})
-        end
-        table.sort(top_ores, function(a, b) return a.count > b.count end)
-        
-        term.setCursorPos(1, 4)
-        term.setTextColor(colors.yellow)
-        term.write('Top Ores:')
-        
-        local ore_y = 5
-        for i = 1, math.min(6, #top_ores) do
-            term.setCursorPos(3, ore_y)
-            term.setTextColor(colors.gray)
-            local short_name = top_ores[i].name:match("([^:]+)$") or top_ores[i].name
-            -- Remove common prefixes for readability
-            short_name = short_name:gsub("^minecraft:", "")
-            short_name = short_name:gsub("_", " ")
-            if #short_name > 20 then
-                short_name = short_name:sub(1, 17) .. "..."
-            end
-            term.write(string.format("%-20s", short_name))
-            term.setTextColor(colors.green)
-            term.write(string.format("%6d", top_ores[i].count))
-            ore_y = ore_y + 1
-        end
-        
-        -- Turtle list header with better spacing
-        local header_y = ore_y + 1
-        term.setCursorPos(1, header_y)
-        term.setTextColor(colors.white)
-        term.setBackgroundColor(colors.brown)
-        term.write(string.format("%-10s %10s %10s", "Turtle ID", "Blocks", "Ores"))
-        term.setBackgroundColor(background_color)
-        
-        -- Display turtle list with better formatting
-        local display_y = header_y + 1
-        for i = scroll_offset + 1, math.min(scroll_offset + max_display, #turtle_ids) do
-            local turtle_id = turtle_ids[i]
-            local turtle = state.turtles[turtle_id]
-            
-            if display_y <= monitor_height - 2 then
-                -- Highlight selected turtle
-                if i == selected_turtle then
-                    term.setBackgroundColor(colors.gray)
-                else
-                    term.setBackgroundColor(background_color)
-                end
-                
-                term.setCursorPos(1, display_y)
-                term.setTextColor(colors.white)
-                term.write(string.format("%04d", turtle_id))
-                
-                term.setCursorPos(11, display_y)
-                if turtle.data and turtle.data.statistics then
-                    term.setTextColor(colors.green)
-                    term.write(string.format("%10d", turtle.data.statistics.blocks_mined or 0))
-                    term.setCursorPos(21, display_y)
-                    term.write(string.format("%10d", turtle.data.statistics.ores_mined or 0))
-                else
-                    term.setTextColor(colors.gray)
-                    term.write(string.format("%10d", 0))
-                    term.setCursorPos(21, display_y)
-                    term.write(string.format("%10d", 0))
-                end
-                
-                display_y = display_y + 1
-            end
-        end
-        
-        -- Navigation buttons
-        local nav_y = monitor_height
-        term.setCursorPos(1, nav_y)
-        term.setBackgroundColor(colors.green)
-        term.setTextColor(colors.white)
-        term.write('<')
-        term.setBackgroundColor(background_color)
-        term.setTextColor(colors.gray)
-        term.write(' Prev')
-        
-        term.setCursorPos(8, nav_y)
-        term.setBackgroundColor(colors.green)
-        term.setTextColor(colors.white)
-        term.write('>')
-        term.setBackgroundColor(background_color)
-        term.setTextColor(colors.gray)
-        term.write(' Next')
-        
-        term.setCursorPos(16, nav_y)
-        term.setBackgroundColor(colors.green)
-        term.setTextColor(colors.white)
-        term.write('^')
-        term.setBackgroundColor(background_color)
-        term.setTextColor(colors.gray)
-        term.write(' Up')
-        
-        term.setCursorPos(22, nav_y)
-        term.setBackgroundColor(colors.green)
-        term.setTextColor(colors.white)
-        term.write('v')
-        term.setBackgroundColor(background_color)
-        term.setTextColor(colors.gray)
-        term.write(' Down')
-        
-        -- Exit button already at top-left, no need for duplicate
-        
-        -- Show selected turtle details with better formatting
-        if #turtle_ids > 0 and selected_turtle <= #turtle_ids then
-            local turtle_id = turtle_ids[selected_turtle]
-            local turtle = state.turtles[turtle_id]
-            
-            if turtle.data and turtle.data.statistics then
-                local detail_x = 35
-                local detail_y = 2
-                
-                if detail_x < monitor_width - 15 then
-                    term.setCursorPos(detail_x, detail_y)
-                    term.setTextColor(colors.yellow)
-                    term.write('Turtle ' .. string.format("%04d", turtle_id))
-                    
-                    detail_y = detail_y + 1
-                    term.setCursorPos(detail_x, detail_y)
-                    term.setTextColor(colors.white)
-                    term.write('Blocks: ')
-                    term.setTextColor(colors.green)
-                    term.write(string.format("%8d", turtle.data.statistics.blocks_mined or 0))
-                    
-                    detail_y = detail_y + 1
-                    term.setCursorPos(detail_x, detail_y)
-                    term.setTextColor(colors.white)
-                    term.write('Ores: ')
-                    term.setTextColor(colors.green)
-                    term.write(string.format("%8d", turtle.data.statistics.ores_mined or 0))
-                    
-                    if turtle.data.statistics.ore_counts then
-                        detail_y = detail_y + 2
-                        term.setCursorPos(detail_x, detail_y)
-                        term.setTextColor(colors.yellow)
-                        term.write('Ore Breakdown:')
-                        
-                        local turtle_ores = {}
-                        for ore_name, count in pairs(turtle.data.statistics.ore_counts) do
-                            table.insert(turtle_ores, {name = ore_name, count = count})
-                        end
-                        table.sort(turtle_ores, function(a, b) return a.count > b.count end)
-                        
-                        detail_y = detail_y + 1
-                        for i = 1, math.min(10, #turtle_ores) do
-                            if detail_y <= monitor_height - 1 then
-                                term.setCursorPos(detail_x, detail_y)
-                                term.setTextColor(colors.gray)
-                                local short_name = turtle_ores[i].name:match("([^:]+)$") or turtle_ores[i].name
-                                short_name = short_name:gsub("^minecraft:", "")
-                                short_name = short_name:gsub("_", " ")
-                                if #short_name > 22 then
-                                    short_name = short_name:sub(1, 19) .. "..."
-                                end
-                                term.write(string.format("%-22s", short_name))
-                                term.setTextColor(colors.green)
-                                term.write(string.format("%6d", turtle_ores[i].count))
-                                detail_y = detail_y + 1
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        
-        monitor.setVisible(true)
-        monitor.setVisible(false)
-        
-        sleep(sleep_len)
-    end
-end
-
-
-function get_version()
-    -- Load version from version.lua file
-    local version_file_path = "/version.lua"
-    if not fs.exists(version_file_path) then
-        version_file_path = "/disk/hub_files/version.lua"
-    end
-    if not fs.exists(version_file_path) then
-        return nil
-    end
-    
-    local version_file = fs.open(version_file_path, "r")
-    if not version_file then
-        return nil
-    end
-    
-    local version_code = version_file.readAll()
-    version_file.close()
-    
-    -- Execute version code in a safe environment
-    local version_func = load(version_code)
-    if version_func then
-        local success, version = pcall(version_func)
-        if success and version and type(version) == "table" then
-            return version
-        end
-    end
-    return nil
-end
-
-function format_version(version)
-    -- Format version table as "MAJOR.MINOR.HOTFIX" or "MAJOR.MINOR.HOTFIX-DEV"
-    if version and type(version) == "table" then
-        local version_str = string.format("%d.%d.%d", version.major or 0, version.minor or 0, version.hotfix or 0)
-        -- Add DEV suffix if present
-        if version.dev_suffix == "-DEV" or version.dev == true then
-            version_str = version_str .. "-DEV"
-        end
-        return version_str
-    end
-    return nil
-end
-
 function menu()
     term.redirect(monitor)
     
@@ -852,10 +502,6 @@ function menu()
                 table.insert(state.user_input, 'clear')
             elseif monitor_touch.x == elements.menu_reset.x and monitor_touch.y == elements.menu_reset.y then
                 table.insert(state.user_input, 'reset')
-            elseif monitor_touch.x == elements.menu_statistics.x and monitor_touch.y == elements.menu_statistics.y then
-                statistics_viewer()
-                -- Ensure term is redirected back to monitor after statistics_viewer returns
-                term.redirect(monitor)
             end
         end
         
@@ -865,18 +511,6 @@ function menu()
         term.setTextColor(colors.white)
         term.setCursorPos(elements.menu_title.x, elements.menu_title.y)
         term.write('WORLD')
-        
-        -- Display version number
-        local version = get_version()
-        if version then
-            local version_str = format_version(version)
-            if version_str then
-                term.setCursorPos(elements.version.x, elements.version.y)
-                term.setTextColor(colors.gray)
-                term.write("v" .. version_str)
-                term.setTextColor(colors.white)
-            end
-        end
         
         for y_offset, line in pairs(menu_lines) do
             term.setCursorPos(elements.menu_title.x, elements.menu_title.y + y_offset)
@@ -893,6 +527,10 @@ function menu()
                 term.write(' ')
             end
         end
+        
+        term.setBackgroundColor(colors.black)
+        term.setCursorPos(elements.menu_suffix.x, elements.menu_suffix.y)
+        term.write('.lua')
         
         term.setBackgroundColor(colors.red)
         term.setCursorPos(elements.viewer_exit.x, elements.viewer_exit.y)
@@ -912,8 +550,6 @@ function menu()
         term.write('*')
         term.setCursorPos(elements.menu_reset.x, elements.menu_reset.y)
         term.write('*')
-        term.setCursorPos(elements.menu_statistics.x, elements.menu_statistics.y)
-        term.write('*')
         term.setBackgroundColor(colors.brown)
         term.setCursorPos(elements.menu_toggle.x + 1, elements.menu_toggle.y)
         term.write('-TOGGLE POWER')
@@ -929,8 +565,6 @@ function menu()
         term.write('-CLEAR')
         term.setCursorPos(elements.menu_reset.x + 1, elements.menu_reset.y)
         term.write('-RESET')
-        term.setCursorPos(elements.menu_statistics.x + 1, elements.menu_statistics.y)
-        term.write('-STATISTICS')
         
         monitor.setVisible(true)
         monitor.setVisible(false)
@@ -990,20 +624,14 @@ function draw_monitor()
     local pixel
     local special = {}
     
-    local mine_enter = config.locations and config.locations.mine_enter or config.mine_entrance
-    if mine_enter then
-        pixel = draw_location(mine_enter, colors.blue)
-        if pixel then
-            special[pixel.x .. ',' .. pixel.y] = colors.blue
-        end
+    pixel = draw_location(config.locations.mine_exit, colors.blue)
+    if pixel then
+        special[pixel.x .. ',' .. pixel.y] = colors.blue
     end
     
-    -- Draw mining center (2 blocks below hub_reference)
-    if config.mining_center then
-        pixel = draw_location({x = config.mining_center.x, y = config.mining_center.y, z = config.mining_center.z}, colors.cyan)
-        if pixel then
-            special[pixel.x .. ',' .. pixel.y] = colors.cyan
-        end
+    pixel = draw_location(config.locations.mine_enter, colors.cyan)
+    if pixel then
+        special[pixel.x .. ',' .. pixel.y] = colors.cyan
     end
     
     -- Draw turtle assigned blocks (if they have blocks assigned)
@@ -1129,6 +757,12 @@ function touch_monitor(monitor_touch)
         monitor_location.x = monitor_location.x - zoom_factor
     elseif monitor_touch.x == elements.right.x and monitor_touch.y == elements.right.y then
         monitor_location.x = monitor_location.x + zoom_factor
+    elseif monitor_touch.x == elements.level_up.x and monitor_touch.y == elements.level_up.y then
+        monitor_level_index = math.min(monitor_level_index + 1, #config.mine_levels)
+        select_mine_level()
+    elseif monitor_touch.x == elements.level_down.x and monitor_touch.y == elements.level_down.y then
+        monitor_level_index = math.max(monitor_level_index - 1, 1)
+        select_mine_level()
     elseif monitor_touch.x == elements.zoom_in.x and monitor_touch.y == elements.zoom_in.y then
         monitor_zoom_level = math.max(monitor_zoom_level - 1, 0)
     elseif monitor_touch.x == elements.zoom_out.x and monitor_touch.y == elements.zoom_out.y then
@@ -1136,13 +770,7 @@ function touch_monitor(monitor_touch)
     elseif monitor_touch.x == elements.menu.x and monitor_touch.y == elements.menu.y then
         menu()
     elseif monitor_touch.x == elements.center.x and monitor_touch.y == elements.center.y then
-        if config.mining_center then
-            monitor_location = {x = config.mining_center.x, z = config.mining_center.z}
-        elseif config.locations and config.locations.mine_enter then
-            monitor_location = {x = config.locations.mine_enter.x, z = config.locations.mine_enter.z}
-        else
-            monitor_location = {x = config.mine_entrance.x, z = config.mine_entrance.z}
-        end
+        monitor_location = {x = config.default_monitor_location.x, z = config.default_monitor_location.z}
     elseif monitor_touch.x == elements.all_turtles.x and monitor_touch.y == elements.all_turtles.y then
         local turtle_ids = {}
         for _, turtle in pairs(state.turtles) do
@@ -1202,10 +830,11 @@ function init_elements()
         turtle_data      = {x =  4, y =  8},
         turtle_return    = {x = 26, y =  8},
         turtle_reboot    = {x = 26, y =  9},
-        turtle_halt      = {x = 26, y = 10},
-        turtle_clear     = {x = 26, y = 11},
-        turtle_reset     = {x = 26, y = 12},
-        turtle_find      = {x = 26, y = 13},
+        turtle_update    = {x = 26, y = 10},
+        turtle_halt      = {x = 26, y = 11},
+        turtle_clear     = {x = 26, y = 12},
+        turtle_reset     = {x = 26, y = 13},
+        turtle_find      = {x = 26, y = 14},
         turtle_forward   = {x = 10, y = 16},
         turtle_back      = {x = 10, y = 18},
         turtle_up        = {x = 23, y = 16},
@@ -1215,7 +844,8 @@ function init_elements()
         turtle_dig_up    = {x = 31, y = 16},
         turtle_dig       = {x = 31, y = 17},
         turtle_dig_down  = {x = 31, y = 18},
-        menu_title       = {x =  7, y =  3},
+        menu_title       = {x =  6, y =  3},
+        menu_suffix      = {x =  31, y =  9},
         menu_toggle      = {x = 10, y = 11},
         menu_update      = {x = 10, y = 13},
         menu_return      = {x = 10, y = 14},
@@ -1228,6 +858,9 @@ function init_elements()
 end
 
 
+function select_mine_level()
+    monitor_level = state.mine[0] -- Not used anymore
+end
 
 
 function step()
@@ -1236,6 +869,7 @@ function step()
     end
     draw_monitor()
     monitor.setVisible(true)
+    monitor.setVisible(false)
     sleep(sleep_len)
 end
 
@@ -1260,40 +894,20 @@ function main()
     monitor = window.create(attached, 1, 1, monitor_width, monitor_height)
     monitor.restore_to = term.current()
     monitor.clear()
-    monitor.setVisible(true)
+    monitor.setVisible(false)
     monitor.setCursorPos(1, 1)
     
-    -- Show loading message while waiting for state.mine
-    term.redirect(monitor)
-    term.setBackgroundColor(colors.black)
-    term.setTextColor(colors.white)
-    monitor.clear()
-    term.setCursorPos(1, 1)
-    print("World Eater Hub")
-    print("Initializing...")
-    print("")
-    print("Waiting for mine state...")
-    term.redirect(monitor.restore_to)
-    
     monitor_location = {x = config.locations.mine_enter.x, z = config.locations.mine_enter.z}
-    monitor_zoom_level = config.default_monitor_zoom_level or 0
+    monitor_zoom_level = config.default_monitor_zoom_level
     
     init_elements()
     
-    -- Wait for mine state to be initialized (state.mine or state.mined_blocks)
-    local wait_count = 0
-    while not state.mine and not state.mined_blocks do
-        wait_count = wait_count + 1
-        if wait_count % 4 == 0 then
-            -- Update loading message every 2 seconds
-            term.redirect(monitor)
-            term.setCursorPos(1, 4)
-            local dots = string.rep(".", (wait_count / 4) % 4)
-            print("Waiting for mine state" .. dots .. "   ")
-            term.redirect(monitor.restore_to)
-        end
+    while not state.mine do
         sleep(0.5)
     end
+    
+    monitor_level_index = 1
+    select_mine_level()
     
     state.monitor_touches = {}
     while true do

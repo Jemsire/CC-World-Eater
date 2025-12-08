@@ -21,7 +21,7 @@ if arg then
         elseif arg_val == "force" then
             force_update = true
             print("Force update mode: Will update even if versions match")
-        elseif arg_val == "force-config" then
+        elseif arg_val == "config" then
             force_config = true
             print("Force update mode: Config files will be updated")
         end
@@ -31,8 +31,6 @@ end
 -- Files to exclude from update (unless force-config is set)
 local config_files = {
     ["hub_files/config.lua"] = true,
-    ["turtle_files/config.lua"] = true,
-    ["pocket_files/info.lua"] = true,  -- Pocket config file
 }
 
 -- Determine drive path first (needed for helper loading)
@@ -41,86 +39,13 @@ if not fs.exists(drive_path) then
     error("No disk drive found!")
 end
 
--- Load GitHub API helper (if available)
+-- Load GitHub API helper
 local github_api_loaded = false
-local helper_paths = {
-    "/apis/github_api.lua",
-    "/disk/hub_files/apis/github_api.lua",
-    drive_path .. "/hub_files/apis/github_api.lua"
-}
+local helper_path = "/github_api.lua"
 
-for _, path in ipairs(helper_paths) do
-    if fs.exists(path) then
-        if os.loadAPI(path) then
-            github_api_loaded = true
-            break
-        end
-    end
-end
-
--- If helper not found, define functions inline (fallback)
-if not github_api_loaded then
-    function parse_json_simple(json_str)
-        local tree_array = string.match(json_str, '"tree"%s*:%s*%[%s*(.*)%s*%]')
-        if not tree_array then return nil end
-        local filtered = {}
-        for obj_match in string.gmatch(tree_array, '{[^}]+}') do
-            local path = string.match(obj_match, '"path"%s*:%s*"([^"]+)"')
-            local obj_type = string.match(obj_match, '"type"%s*:%s*"([^"]+)"')
-            -- GitHub API returns "blob" for files and "tree" for directories
-            if path and obj_type == "blob" then
-                table.insert(filtered, path)
-            end
-        end
-        return filtered
-    end
-    
-    function get_latest_release_tag(github_repo)
-        -- Get the latest release tag from GitHub releases API
-        local api_url = "https://api.github.com/repos/" .. github_repo .. "/releases/latest"
-        local response = http.get(api_url, {["Accept"] = "application/vnd.github.v3+json"})
-        if not response then return nil end
-        
-        local content = response.readAll()
-        response.close()
-        
-        -- Try to parse JSON
-        local tag_name = nil
-        if textutils and textutils.unserializeJSON then
-            local json_data = textutils.unserializeJSON(content)
-            if json_data and json_data.tag_name then
-                tag_name = json_data.tag_name
-            end
-        else
-            -- Simple regex fallback
-            tag_name = string.match(content, '"tag_name"%s*:%s*"([^"]+)"')
-        end
-        
-        return tag_name
-    end
-    
-    function get_file_tree(github_repo, github_branch)
-        local api_url = "https://api.github.com/repos/" .. github_repo .. "/git/trees/" .. github_branch .. "?recursive=1"
-        local response = http.get(api_url, {["Accept"] = "application/vnd.github.v3+json"})
-        if not response then return nil end
-        
-        local content = response.readAll()
-        response.close()
-        
-        local json_data = nil
-        if textutils and textutils.unserializeJSON then
-            json_data = textutils.unserializeJSON(content)
-        else
-            local file_paths = parse_json_simple(content)
-            if file_paths then
-                json_data = {tree = {}}
-                for _, path in ipairs(file_paths) do
-                    table.insert(json_data.tree, {path = path, type = "file"})
-                end
-            end
-        end
-        
-        return json_data and json_data.tree or nil
+if fs.exists(helper_path) then
+    if os.loadAPI(helper_path) then
+        github_api_loaded = true
     end
 end
 
@@ -148,71 +73,33 @@ else
     print("")
 end
 
--- Download file list from GitHub using API (dynamic discovery)
+-- Download file list from GitHub using API
 local function get_hub_files()
-    -- Use latest tag if available, otherwise fallback to main branch
     local ref_to_use = latest_tag or GITHUB_BRANCH
     local tree = get_file_tree(GITHUB_REPO, ref_to_use)
     
     if not tree then
         error("Failed to retrieve file list from GitHub API. Please check your internet connection and try again.")
     end
-    
-    -- Collect hub files
-    local hub_files = {}
+
+    -- Collect files
+    local files = {}
     for _, item in ipairs(tree) do
         -- GitHub API returns "blob" for files and "tree" for directories
         if item.type == "blob" and item.path then
             local path = item.path
-            -- Include hub_files/* and hub.lua, exclude config unless force_config
-            -- Skip utilities.lua - will copy from shared_files to apis instead
-            if string.match(path, "^hub_files/") then
-                -- Skip config file unless force_config is enabled
-                -- Skip utilities.lua - will copy from shared_files to apis
-                if (not config_files[path] or force_config) and path ~= "hub_files/utilities.lua" then
-                    table.insert(hub_files, path)
-                    -- Debug: Show init_apis.lua when found
-                    if path == "hub_files/init_apis.lua" then
-                        print("  [DEBUG] Found init_apis.lua in file list")
-                    end
-                end
-            elseif path == "hub.lua" then
-                table.insert(hub_files, path)
+            -- Skip config files unless force_config is enabled
+            if not config_files[path] or force_config then
+                table.insert(files, path)
             end
         end
     end
     
-    return hub_files
+    return files
 end
 
 -- Get hub files dynamically from GitHub
-local hub_files = get_hub_files()
-
--- Function to get shared files
-local function get_shared_files()
-    local ref_to_use = latest_tag or GITHUB_BRANCH
-    local tree = get_file_tree(GITHUB_REPO, ref_to_use)
-    
-    if not tree then
-        return {}
-    end
-    
-    -- Collect shared files
-    local shared_files = {}
-    for _, item in ipairs(tree) do
-        if item.type == "blob" and item.path then
-            local path = item.path
-            if string.match(path, "^shared_files/") then
-                table.insert(shared_files, path)
-            end
-        end
-    end
-    
-    return shared_files
-end
-
--- Get shared files
-local shared_files = get_shared_files()
+local files = get_files()
 
 -- Check for HTTP API
 if not http then
@@ -220,7 +107,7 @@ if not http then
 end
 
 print("========================================")
-print("  World Eater Hub Update")
+print("  World Eater Update")
 print("========================================")
 
 -- Function to format version table as string "MAJOR.MINOR.HOTFIX" or "MAJOR.MINOR.HOTFIX-DEV"
@@ -260,24 +147,19 @@ end
 
 -- Function to get local version
 local function get_local_version()
-    local version_paths = {
-        "/version.lua",
-        "/disk/hub_files/version.lua",
-        drive_path .. "/hub_files/version.lua"
-    }
+    local version_path = "/hub_files/version.lua"
     
-    for _, path in ipairs(version_paths) do
-        if fs.exists(path) then
-            local version_file = fs.open(path, "r")
-            if version_file then
-                local version_code = version_file.readAll()
-                version_file.close()
-                local version_func = load(version_code)
-                if version_func then
-                    local success, version = pcall(version_func)
-                    if success and version and type(version) == "table" then
-                        return version
-                    end
+    if fs.exists(version_path) then
+        local version_file = fs.open(version_path, "r")
+        if version_file then
+            local version_code = version_file.readAll()
+            version_file.close()
+            local version_func = load(version_code)
+
+            if version_func then
+                local success, version = pcall(version_func)
+                if success and version and type(version) == "table" then
+                    return version
                 end
             end
         end
@@ -288,7 +170,7 @@ end
 -- Function to get remote version from GitHub
 local function get_remote_version()
     -- Use GITHUB_BASE which is already set based on dev_mode or latest_tag
-    local url = GITHUB_BASE .. "/hub_files/version.lua"
+    local url = GITHUB_BASE .. "/shared_files/version.lua"
     local response = http.get(url)
     if response then
         local content = response.readAll()
@@ -340,7 +222,7 @@ if local_version then
                 print("")
             else
                 print("Already up-to-date! No update needed.")
-                print("(Use 'update force' to force update, 'update dev' for dev mode, or 'update force-config' to update config files)")
+                print("(Use 'update force' to force update, 'update dev' for dev mode, or 'update config' to update config files)")
                 return
             end
         end
@@ -407,94 +289,8 @@ local updated_count = 0
 local skipped_count = 0
 local error_count = 0
 
--- Download and update shared files first, then copy to destinations
-if #shared_files > 0 then
-    print("Updating shared files...")
-    for _, filepath in ipairs(shared_files) do
-        -- Yield to prevent "too long without yielding" error
-        os.queueEvent("yield")
-        os.pullEvent("yield")
-        
-        local url = GITHUB_BASE .. "/" .. filepath
-        local temp_path = drive_path .. "/" .. filepath
-        
-        print("  Downloading shared file: " .. filepath)
-        
-        local response = http.get(url)
-        if response then
-            local content = ""
-            while true do
-                local chunk = response.read(8192)
-                if not chunk then break end
-                content = content .. chunk
-                if #content % 32768 == 0 then
-                    os.queueEvent("yield")
-                    os.pullEvent("yield")
-                end
-            end
-            response.close()
-            
-            -- Create directory if needed
-            local dir = string.match(temp_path, "^(.-)[^/\\]*$")
-            if dir and dir ~= "" then
-                fs.makeDir(dir)
-            end
-            
-            -- Write to temp location
-            local file = fs.open(temp_path, "w")
-            if file then
-                file.write(content)
-                file.close()
-                
-                -- Copy utilities.lua to apis folders as utilities.lua
-                if filepath == "shared_files/utilities.lua" then
-                    -- Copy to hub_files/apis/utilities.lua
-                    local hub_apis_dir = drive_path .. "/hub_files/apis"
-                    if not fs.exists(hub_apis_dir) then
-                        fs.makeDir(hub_apis_dir)
-                    end
-                    local hub_dest = hub_apis_dir .. "/utilities.lua"
-                    -- Delete existing file if it exists
-                    if fs.exists(hub_dest) then
-                        fs.delete(hub_dest)
-                    end
-                    fs.copy(temp_path, hub_dest)
-                    print("    ✓ Copied to hub_files/apis/utilities.lua")
-                    
-                    -- Copy to turtle_files/apis/utilities.lua
-                    local turtle_apis_dir = drive_path .. "/turtle_files/apis"
-                    if not fs.exists(turtle_apis_dir) then
-                        fs.makeDir(turtle_apis_dir)
-                    end
-                    local turtle_dest = turtle_apis_dir .. "/utilities.lua"
-                    -- Delete existing file if it exists
-                    if fs.exists(turtle_dest) then
-                        fs.delete(turtle_dest)
-                    end
-                    fs.copy(temp_path, turtle_dest)
-                    print("    ✓ Copied to turtle_files/apis/utilities.lua")
-                    
-                    updated_count = updated_count + 2  -- Count as 2 updates
-                end
-                
-                -- Clean up temp file
-                if fs.exists(temp_path) then
-                    fs.delete(temp_path)
-                end
-            else
-                print("    ✗ Failed to write temp file")
-                error_count = error_count + 1
-            end
-        else
-            print("    ✗ Failed to download shared file")
-            error_count = error_count + 1
-        end
-    end
-    print("")
-end
-
 -- Download and update each hub file
-for _, filepath in ipairs(hub_files) do
+for _, filepath in ipairs(files) do
     -- Yield to prevent "too long without yielding" error
     os.queueEvent("yield")
     os.pullEvent("yield")
@@ -605,7 +401,7 @@ if updated_count > 0 and error_count == 0 and remote_version then
         new_version.dev = false
     end
     
-    local version_path = drive_path .. "/hub_files/version.lua"
+    local version_path = drive_path .. "/shared_files/version.lua"
     
     -- Create directory if needed
     local dir = string.match(version_path, "^(.-)[^/\\]*$")
@@ -615,11 +411,11 @@ if updated_count > 0 and error_count == 0 and remote_version then
     
     local version_file = fs.open(version_path, "w")
     if version_file then
-        version_file.write("-- World Eater Hub Version\n")
+        version_file.write("-- World Eater Version\n")
         version_file.write("-- This version number matches the version from GitHub\n")
         version_file.write("-- Version format: semantic versioning MAJOR.MINOR.HOTFIX\n")
         if dev_mode then
-            version_file.write("-- DEV MODE: This version has -DEV suffix and will force update turtles\n")
+            version_file.write("-- DEV MODE: This version has -DEV suffix\n")
         end
         version_file.write("-- Returns: {major=1, minor=0, hotfix=0, dev_suffix=\"-DEV\"}\n")
         version_file.write("return {\n")

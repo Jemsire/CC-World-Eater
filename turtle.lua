@@ -1,47 +1,13 @@
 hub_id = ...
 
--- WORLD EATER: Load turtle files from disk
-local turtle_files_path = '/disk/turtle_files'
-
 for _, filename in pairs(fs.list('/')) do
     if filename ~= 'rom' and filename ~= 'disk' and filename ~= 'openp' and filename ~= 'ppp' and filename ~= 'persistent' then
-        -- Skip all disk mount points (defensive - we only use /disk, but skip others if present)
-        if not string.match(filename, '^disk%d*$') then
-            local full_path = '/' .. filename
-            -- Use pcall to handle errors gracefully (e.g., protected mount points)
-            local success, err = pcall(fs.delete, full_path)
-            if not success then
-                -- Silently skip files that can't be deleted (mount points, etc.)
-            end
-        end
+        fs.delete(filename)
     end
 end
-
--- Copy all files from turtle_files (except version.lua - it's downloaded from hub during updates)
-for _, filename in pairs(fs.list(turtle_files_path)) do
-    if filename ~= 'apis' and filename ~= 'version.lua' then
-        fs.copy(turtle_files_path .. '/' .. filename, '/' .. filename)
-    end
-end
-
--- Copy version.lua from hub_files if it exists (downloaded during update)
-if fs.exists(turtle_files_path .. '/../hub_files/version.lua') then
-    fs.copy(turtle_files_path .. '/../hub_files/version.lua', '/version.lua')
-    print("Copied version.lua from hub")
-elseif fs.exists('/disk/hub_files/version.lua') then
-    fs.copy('/disk/hub_files/version.lua', '/version.lua')
-    print("Copied version.lua from hub")
-end
-
--- Copy apis folder
-if fs.exists(turtle_files_path .. '/apis') then
-    if fs.exists('/apis') then
-        fs.delete('/apis')
-    end
-    fs.makeDir('/apis')
-    for _, filename in pairs(fs.list(turtle_files_path .. '/apis')) do
-        fs.copy(turtle_files_path .. '/apis/' .. filename, '/apis/' .. filename)
-    end
+-- Grab all turtle files from disk and rename them to local storage
+for _, filename in pairs(fs.list('/disk/turtle_files')) do
+    fs.copy('/disk/turtle_files/' .. filename, '/' .. filename)
 end
 
 if not tonumber(hub_id) then
@@ -55,50 +21,6 @@ end
 file = fs.open('/hub_id', 'w')
 file.write(hub_id)
 file.close()
-
--- Create update wrapper script in root so "update" command works
-local update_wrapper = fs.open('/update', 'w')
-if update_wrapper then
-    update_wrapper.write([[
--- Update wrapper - runs the update script from disk
-if fs.exists('/disk/turtle_files/update') then
-    shell.run('/disk/turtle_files/update', ...)
-elseif fs.exists('/update') then
-    shell.run('/update', ...)
-else
-    print('Update script not found!')
-    print('Run: disk/turtle_files/update')
-end
-]])
-    update_wrapper.close()
-end
-
--- Create startup file to automatically run startup.lua on boot
--- (startup.lua is already copied from turtle_files by this script)
-local startup_file = fs.open('/startup', 'w')
-if startup_file then
-    startup_file.write([[
--- Auto-generated startup file for World Eater Turtle
--- This file runs the turtle's main startup script
-
-print("Turtle startup script running...")
-if fs.exists('/startup.lua') then
-    local success, err = pcall(function()
-        shell.run('/startup.lua')
-    end)
-    if not success then
-        print("ERROR in startup.lua: " .. tostring(err))
-        print("Press any key to continue...")
-        os.pullEvent("key")
-    end
-else
-    print('startup.lua not found - run turtle.lua to initialize')
-    print("Press any key to continue...")
-    os.pullEvent("key")
-end
-]])
-    startup_file.close()
-end
 
 print("Linked")
 

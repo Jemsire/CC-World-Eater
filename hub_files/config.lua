@@ -3,47 +3,14 @@ inf = 1e309
 ---==[ MINE ]==---
 
 
----==[ WORLD EATER CONFIGURATION ]==---
-
--- HUB REFERENCE POINT (Central reference for entire setup)
---     This is the central reference block that everything is positioned relative to
---     Hub computer must be within 8 blocks north or south of this point
-hub_reference = {x = 2141, y = 132, z = -130}
-
--- MINING CENTER (Where mining operations start from)
---     Located 2 blocks below hub_reference to avoid surface interference
---     Mining area expands outward from this point in a spiral pattern
-mining_center = {
-    x = hub_reference.x,
-    y = hub_reference.y - 2,  -- 2 blocks below hub_reference
-    z = hub_reference.z
-}
-
--- BEDROCK LEVEL (Y coordinate where mining stops)
---     Minecraft 1.18+ bedrock is at Y=-64
-bedrock_level = -64
-
--- MINING RADIUS (Primary way to limit mining area - RECOMMENDED)
---     Creates a circular mining area centered on mining_center
---     Radius is in blocks from mining_center (diameter = radius * 2)
---     Set to nil for unlimited mining
---     Example: mining_radius = 50  -- Mines 50 blocks radius (100 block diameter total)
-mining_radius = 100  -- Set to number (in blocks) to limit mining to radius
-
--- MINING AREA BOUNDS (Optional, alternative to mining_radius - uses ABSOLUTE world coordinates)
---     If mining_radius is set, this is IGNORED
---     These are ABSOLUTE world coordinates (not relative to mining_center)
---     Set to nil for unlimited mining
---     NOTE: Use mining_radius instead for easier radius/diameter control
-mining_area = {
-    min_x = -inf,
-    max_x = inf,
-    min_z = -inf,
-    max_z = inf
-}
-
--- mine_entrance is based on hub_reference (used throughout codebase)
-mine_entrance = {x = hub_reference.x, y = hub_reference.y, z = hub_reference.z}
+-- LOCATION OF THE CENTER OF THE MINE
+--     the y value should be set to the height
+--     1 above the surface:
+--
+--            Y
+--     ####### #######
+--     ####### #######
+mine_entrance = {x = 2141, y = 132, z = -130}
 c = mine_entrance
 
 
@@ -55,6 +22,22 @@ c = mine_entrance
 --     WARNING: not using chunky turtles will
 --     result in narcoleptic turtles!
 use_chunky_turtles = true
+
+
+-- MINING RADIUS (Primary way to limit mining area - RECOMMENDED)
+--     Creates a circular mining area centered on mining_center
+--     Radius is in blocks from mining_center (diameter = radius * 2)
+--     Set to nil for unlimited mining
+--     Example: mining_radius = 50  -- Mines 50 blocks radius (100 block diameter total)
+mining_radius = 50  -- Set to number (in blocks) to limit mining to radius
+
+
+-- MAXIMUM MINING AMOUNT PER TRIP
+-- PER TURTLE
+--     most efficient would be to make this
+--     number huge, but turtles may be gone a
+--     while (plus harder to recall).
+mission_length = 150
 
 
 -- EXTRA FUEL FOR TURTLES TO BRING ALONG,
@@ -87,10 +70,6 @@ task_timeout = 0.5
 -- EVERY BLOCK NAME CONTAINING ANY OF THESE
 -- STRINGS WILL NOT BE MINED
 --     e.g. "chest" will prevent "minecraft:trapped_chest".
---     ore types should not be put on this list,
---     but if not desired should be removed from
---     <orenames> below.
---
 -- WHAT HAPPENS WHEN TURTLE HITS A DISALLOWED BLOCK:
 --     - Bedrock: Mining stops and returns to surface (expected - reached bottom)
 --       * Block is marked as mined
@@ -124,9 +103,10 @@ paths = {
     --     recommended not to change this one.
     home_to_home_exit          = 'zyx',
     control_room_to_home_enter = 'yzx',
+    home_to_disk               = 'zyx',
     home_to_waiting_room       = 'zyx',
     waiting_room_to_mine_exit  = 'yzx',
-    mine_enter_to_block        = 'yxz',  -- Path to assigned block for world eater
+    mine_enter_to_strip        = 'yxz',
 }
 
 
@@ -134,18 +114,12 @@ locations = {
     -- THE VARIUS PLACES THE TURTLES MOVE
     -- BETWEEN
     --     coordinates are relative to the
-    --     <hub_reference> variable. areas are for
+    --     <mine_center> variable. areas are for
     --     altering turtle behavior to prevent
     --     collisions and stuff.
 
-    -- HUB REFERENCE POINT (Central reference)
-    hub_reference = {x = hub_reference.x, y = hub_reference.y, z = hub_reference.z},
-    
-    -- MINING CENTER (2 blocks below hub_reference)
-    mining_center = {x = mining_center.x, y = mining_center.y, z = mining_center.z},
-
-    -- THE BLOCK TURTLES WILL GO TO BEFORE
-    -- DECENDING (now based on hub_reference)
+     -- THE BLOCK TURTLES WILL GO TO BEFORE
+     -- DECENDING
     mine_enter = {x = c.x+0, y = c.y+0, z = c.z+0},
 
      -- THE BLOCK TURTLES WILL COME UP TO
@@ -161,12 +135,6 @@ locations = {
      -- TO ACCESS THE CHEST FOR FUEL
     refuel = {x = c.x+2, y = c.y+1, z = c.z+0, orientation = 'east'},
 
-     -- THE BLOCK TURTLES GO TO IN ORDER
-     -- TO ACCESS THE DISK DRIVE FOR UPDATES
-     --     Disk drive is always 1 block below the hub computer (calculated dynamically at startup)
-     --     This is a placeholder - actual location is set in startup.lua using GPS
-    disk_drive = {x = 0, y = 0, z = 0, orientation = 'east'},
-
      -- THE AREA ENCOMPASSING TURTLE HOMES
      --     where they sleep.
     greater_home_area = {
@@ -181,14 +149,13 @@ locations = {
      -- THE ROOM WHERE THE MAGIC HAPPENS
      --     turtles can find there way home from
      --     here.
-     --     Updated for world eater: Hub computer must be within 8 blocks north/south
     control_room_area = {
-        min_x = c.x-8,   -- Can extend west
-        max_x = c.x+8,   -- Can extend east
+        min_x = c.x-16,
+        max_x = c.x+8,
         min_y = c.y+0,
         max_y = c.y+8,
-        min_z = c.z-8,   -- Can extend 8 blocks north
-        max_z = c.z+8    -- Can extend 8 blocks south
+        min_z = c.z-8,
+        max_z = c.z+8
     },
 
      -- WHERE TURTLES QUEUE TO BE PAIRED UP
@@ -342,65 +309,6 @@ chunky_turtle_locations = {
 }
 
 
-gravitynames = {
-    -- ALL BLOCKS AFFECTED BY GRAVITY
-    --     if a turtle sees these it will take
-    --     extra care to make sure they're delt
-    --     with. works at least a lot percent of
-    --     the time
-    ['minecraft:gravel'] = true,
-    ['minecraft:sand'] = true,
-}
-
-
-orenames = {
-    -- ALL THE BLOCKS A TURTLE CONSIDERS ORE
-    --     block names are exact.
-    ['BigReactors:YelloriteOre'] = true,
-    ['bigreactors:oreyellorite'] = true,
-    ['DraconicEvolution:draconiumDust'] = true,
-    ['DraconicEvolution:draconiumOre'] = true,
-    ['Forestry:apatite'] = true,
-    ['Forestry:resources'] = true,
-    ['IC2:blockOreCopper'] = true,
-    ['IC2:blockOreLead'] = true,
-    ['IC2:blockOreTin'] = true,
-    ['IC2:blockOreUran'] = true,
-    ['ic2:resource'] = true,
-    ['ProjRed|Core:projectred.core.part'] = true,
-    ['ProjRed|Exploration:projectred.exploration.ore'] = true,
-    ['TConstruct:SearedBrick'] = true,
-    ['ThermalFoundation:Ore'] = true,
-    ['thermalfoundation:ore'] = true,
-    ['thermalfoundation:ore_fluid'] = true,
-    ['thaumcraft:ore_amber'] = true,
-    ['minecraft:coal'] = true,
-    ['minecraft:coal_ore'] = true,
-    ['minecraft:diamond'] = true,
-    ['minecraft:diamond_ore'] = true,
-    ['minecraft:dye'] = true,
-    ['minecraft:emerald'] = true,
-    ['minecraft:emerald_ore'] = true,
-    ['minecraft:gold_ore'] = true,
-    ['minecraft:iron_ore'] = true,
-    ['minecraft:lapis_ore'] = true,
-    ['minecraft:redstone'] = true,
-    ['minecraft:redstone_ore'] = true,
-    ['galacticraftcore:basic_block_core'] = true,
-    ['mekanism:oreblock'] = true,
-    ['appliedenergistics2:quartz_ore'] = true
-}
-
-blocktags = {
-    -- ALL BLOCKS WITH ONE OF THESE TAGS A TURTLE CONSIDERS ORE
-    --     most mods categorize ores with the forge:ores tag.
-    --     this is an easy way to detect all but a few ores,
-    --     which don't posess this exact tag (for example certus quartzfrom AE2)
-    ['forge:ores'] = true,
-    -- adds Certus Quartz and Charged Certus Quartz
-    ['forge:ores/certus_quartz'] = true
-}
-
 fuelnames = {
     -- ITEMS THE TURTLE CONSIDERS FUEL
     -- CC:Tweaked turtles can use any furnace fuel
@@ -447,5 +355,3 @@ default_monitor_zoom_level = 0
 -- CENTER OF THE MAP SCREEN
 --     probably want the mine center
 default_monitor_location = {x = c.x, z = c.z}
-
--- All config variables are now global (os.loadAPI style)

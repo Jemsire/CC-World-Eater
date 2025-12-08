@@ -1,348 +1,256 @@
--- WORLD EATER: Turtle Update Script
--- Copies updated files from hub's disk drive
--- Turtles always update config files to stay in sync with hub
+-- ==============================================
+-- TURTLE UPDATE SCRIPT WITH FILE STREAMING
+-- ==============================================
+-- This script updates the turtle's files by
+-- streaming them one-by-one from the hub to
+-- avoid the 64KB rednet message size limit.
+-- ==============================================
 
-local drive_path = "/disk"
-local has_disk = fs.exists(drive_path)
-local update_to_root = not has_disk  -- If no disk, update directly to root
+-- Enable debug mode for verbose output
+local DEBUG = true
 
-if not has_disk then
-    print("⚠ No disk drive found - cannot update")
-    print("  Turtle must be at hub to update")
+-- Helper function for debug printing
+local function debug_print(message)
+    if DEBUG then
+        print('[DEBUG] ' .. message)
+    end
+end
+
+-- Helper function for error printing
+local function error_print(message)
+    term.setTextColor(colors.red)
+    print('[ERROR] ' .. message)
+    term.setTextColor(colors.white)
+end
+
+-- Helper function for success printing
+local function success_print(message)
+    term.setTextColor(colors.lime)
+    print('[SUCCESS] ' .. message)
+    term.setTextColor(colors.white)
+end
+
+-- ==============================================
+-- STEP 1: READ HUB ID
+-- ==============================================
+debug_print('Reading hub ID...')
+local hub_id_file = fs.open('/hub_id', 'r')
+if not hub_id_file then
+    error_print('Failed to open /hub_id file!')
+    error_print('Make sure the turtle is initialized.')
     return
 end
 
--- Function to report update completion to hub
-local function report_update_complete()
-    local hub_id = nil
-    if fs.exists("/hub_id") then
-        local hub_id_file = fs.open("/hub_id", "r")
-        if hub_id_file then
-            hub_id = hub_id_file.readAll()
-            hub_id_file.close()
-        end
-    end
-    
-    if hub_id and rednet then
-        -- Try to open rednet if not already open
-        local rednet_open = false
-        for _, side in pairs({'back', 'top', 'left', 'right'}) do
-            if peripheral.getType(side) == 'modem' then
-                rednet.open(side)
-                rednet_open = true
-                break
-            end
-        end
-        
-        if rednet_open then
-            pcall(function()
-                rednet.send(tonumber(hub_id), {}, 'update_complete')
-                sleep(0.2)  -- Brief delay to ensure message is sent
-            end)
-        end
-    end
-end
+local hub_id = tonumber(hub_id_file.readAll())
+hub_id_file.close()
 
-print("========================================")
-print("  World Eater Turtle Update")
-print("========================================")
-print("Copying files from hub disk drive...")
-print("")
-
-local updated_count = 0
-local skipped_count = 0
-local error_count = 0
-
--- List of files to copy from disk (all turtle files)
-local turtle_files = {}
-local disk_turtle_path = drive_path .. "/turtle_files"
-
-if not fs.exists(disk_turtle_path) then
-    print("ERROR: turtle_files directory not found on disk!")
-    print("  Make sure hub has been updated first")
+if not hub_id then
+    error_print('Invalid hub_id in /hub_id file!')
     return
 end
 
--- Get all files from disk/turtle_files (excluding version.lua - downloaded from hub)
-local function get_files_from_disk(dir_path, base_path)
-    base_path = base_path or ""
-    local files = {}
-    
-    for _, filename in pairs(fs.list(dir_path)) do
-        -- Skip version.lua - it's downloaded from hub_files during updates
-        if filename == "version.lua" then
-            -- Skip this file
-        else
-            local full_path = fs.combine(dir_path, filename)
-            local relative_path = base_path == "" and filename or (base_path .. "/" .. filename)
-            
-            if fs.isDir(full_path) then
-                -- Recursively get files from subdirectory
-                local sub_files = get_files_from_disk(full_path, relative_path)
-                for _, sub_file in ipairs(sub_files) do
-                    table.insert(files, sub_file)
-                end
-            else
-                -- Add file to list
-                table.insert(files, "turtle_files/" .. relative_path)
-            end
-        end
-    end
-    
-    return files
-end
+debug_print('Hub ID: ' .. hub_id)
 
-turtle_files = get_files_from_disk(disk_turtle_path)
+-- ==============================================
+-- STEP 2: SEND UPDATE REQUEST
+-- ==============================================
+local path = '/disk/turtle_files/'
+print('Requesting ' .. path .. ' for update.')
+rednet.send(hub_id, path, 'update_request')
 
--- Also include turtle.lua if it exists
-if fs.exists(drive_path .. "/turtle.lua") then
-    table.insert(turtle_files, "turtle.lua")
-end
+-- ==============================================
+-- STEP 3: RECEIVE FILE LIST
+-- ==============================================
+debug_print('Waiting for update start message...')
+local sender, start_message, protocol = rednet.receive('update_start', 30)
 
-if #turtle_files == 0 then
-    print("No files found on disk to update!")
+-- Validate response
+if not protocol or protocol ~= 'update_start' then
+    error_print('Did not receive update_start message!')
+    error_print('Update aborted - no files were deleted.')
     return
 end
 
-print("Found " .. #turtle_files .. " files to update")
-print("")
+if sender ~= hub_id then
+    error_print('Received message from unknown sender: ' .. tostring(sender))
+    error_print('Update aborted - no files were deleted.')
+    return
+end
 
--- Copy each file from disk
-for _, filepath in ipairs(turtle_files) do
-    -- Yield to prevent "too long without yielding" error
-    os.queueEvent("yield")
-    os.pullEvent("yield")
-    
-    local source_path = drive_path .. "/" .. filepath
-    local dest_path
-    
-    if update_to_root then
-        -- Download directly to root, removing turtle_files/ prefix
-        local root_path = string.gsub(filepath, "^turtle_files/", "")
-        dest_path = "/" .. root_path
-    else
-        dest_path = drive_path .. "/" .. filepath
+if not start_message or not start_message.file_count then
+    error_print('Invalid update_start message!')
+    error_print('Update aborted - no files were deleted.')
+    return
+end
+
+local file_count = start_message.file_count
+local file_list = start_message.file_list
+
+print('Ready to receive ' .. file_count .. ' files.')
+debug_print('Files to download:')
+if DEBUG then
+    for i, file_name in ipairs(file_list) do
+        print('  ' .. i .. '. ' .. file_name)
     end
+end
+
+-- ==============================================
+-- STEP 4: SEND ACKNOWLEDGMENT
+-- ==============================================
+debug_print('Sending ready acknowledgment...')
+rednet.send(hub_id, true, 'update_ready')
+
+-- ==============================================
+-- STEP 5: DELETE OLD FILES
+-- ==============================================
+print('Deleting old files...')
+local files_deleted = 0
+for _, file_name in pairs(fs.list('/')) do
+    -- Preserve critical system directories
+    if file_name ~= 'rom' and file_name ~= 'persistent' and file_name ~= 'hub_id' then
+        debug_print('Deleting: ' .. file_name)
+        fs.delete(file_name)
+        files_deleted = files_deleted + 1
+    end
+end
+print('Deleted ' .. files_deleted .. ' old files.')
+
+-- ==============================================
+-- STEP 6: RECEIVE FILES ONE BY ONE
+-- ==============================================
+print('Receiving files...')
+local files_received = 0
+local last_index = 0
+
+while files_received < file_count do
+    -- Receive next file (filter for update-related protocols only)
+    debug_print('Waiting for file ' .. (files_received + 1) .. '/' .. file_count .. '...')
+    local file_sender, file_message, file_protocol
     
-    if not fs.exists(source_path) then
-        print("  Skipping (not found): " .. filepath)
-        skipped_count = skipped_count + 1
-    else
-        print("  Copying: " .. filepath)
-        
-        -- Yield before file operations
-        os.queueEvent("yield")
-        os.pullEvent("yield")
-        
-        -- Create directory if needed
-        local dir = string.match(dest_path, "^(.-)[^/\\]*$")
-        if dir and dir ~= "" and dir ~= "/" then
-            fs.makeDir(dir)
+    -- Loop until we receive an update-related message, ignoring other protocols
+    local timeout = 30
+    local start_time = os.clock()
+    while true do
+        local remaining_time = timeout - (os.clock() - start_time)
+        if remaining_time <= 0 then
+            error_print('Timeout waiting for file ' .. (files_received + 1) .. '/' .. file_count)
+            error_print('Update failed!')
+            return
         end
         
-        -- Copy file
-        local success, err = pcall(function()
-            fs.copy(source_path, dest_path)
-        end)
+        file_sender, file_message, file_protocol = rednet.receive(nil, remaining_time)
         
-        if success then
-            updated_count = updated_count + 1
+        -- Check if we timed out
+        if not file_protocol then
+            error_print('Timeout waiting for file ' .. (files_received + 1) .. '/' .. file_count)
+            error_print('Update failed!')
+            return
+        end
+        
+        -- Only process update-related protocols, ignore others (like hub_report, turtle_report, etc.)
+        if file_protocol == 'update_file' or file_protocol == 'update_error' or file_protocol == 'update_complete' then
+            break
         else
-            print("    ERROR: " .. (err or "unknown error"))
-            error_count = error_count + 1
+            -- Ignore non-update messages and continue waiting
+            debug_print('Ignoring non-update message with protocol: ' .. tostring(file_protocol))
         end
     end
-end
 
--- Download version.lua from hub (always get latest version from hub)
-print("")
-print("Downloading version.lua from hub...")
-local hub_version_path = drive_path .. "/hub_files/version.lua"
-local turtle_version_path = update_to_root and "/version.lua" or (drive_path .. "/turtle_files/version.lua")
+    -- Check for errors
+    if file_protocol == 'update_error' then
+        error_print('Hub reported an error: ' .. tostring(file_message.error))
+        error_print('Update failed! Turtle may be in an inconsistent state.')
+        error_print('Please run update again or manually restore files.')
+        return
+    end
 
-if fs.exists(hub_version_path) then
-    -- Copy hub version to turtle
-    local success, err = pcall(function()
-        if update_to_root then
-            fs.copy(hub_version_path, turtle_version_path)
+    -- Check for completion (in case we missed a file somehow)
+    if file_protocol == 'update_complete' then
+        if files_received == file_count then
+            success_print('All files received successfully!')
+            break
         else
-            -- Copy to disk first, will be copied to root by turtle.lua
-            fs.copy(hub_version_path, turtle_version_path)
+            error_print('Received completion but only got ' .. files_received .. '/' .. file_count .. ' files!')
+            error_print('Update incomplete! Please run update again.')
+            return
         end
-    end)
-    
-    if success then
-        print("  ✓ Downloaded version.lua from hub")
-        updated_count = updated_count + 1
-    else
-        print("  ✗ Failed to download version.lua: " .. (err or "unknown error"))
-        error_count = error_count + 1
     end
-else
-    print("  ⚠ Hub version.lua not found on disk (using existing turtle version if available)")
+
+    -- Validate file message (should be update_file at this point)
+    if file_protocol ~= 'update_file' then
+        error_print('Unexpected protocol: ' .. tostring(file_protocol))
+        error_print('Expected update_file, got: ' .. tostring(file_protocol))
+        error_print('Update failed!')
+        return
+    end
+
+    if file_sender ~= hub_id then
+        error_print('Received file from unknown sender: ' .. tostring(file_sender))
+        error_print('Update failed!')
+        return
+    end
+
+    if not file_message or not file_message.name or not file_message.content then
+        error_print('Invalid file message received!')
+        error_print('Update failed!')
+        return
+    end
+
+    -- Check file index is sequential
+    if file_message.index ~= last_index + 1 then
+        error_print('File index mismatch! Expected ' .. (last_index + 1) .. ', got ' .. file_message.index)
+        error_print('Update failed!')
+        return
+    end
+
+    last_index = file_message.index
+
+    -- Write the file
+    local file_name = file_message.name
+    local file_content = file_message.content
+
+    debug_print('Writing file ' .. file_message.index .. '/' .. file_message.total .. ': ' .. file_name)
+
+    -- Create parent directories if needed
+    local parent_dir = fs.getDir(file_name)
+    if parent_dir ~= '' and not fs.exists(parent_dir) then
+        debug_print('Creating directory: ' .. parent_dir)
+        fs.makeDir(parent_dir)
+    end
+
+    -- Write file
+    local file_handle = fs.open(file_name, 'w')
+    if not file_handle then
+        error_print('Failed to open file for writing: ' .. file_name)
+        error_print('Update failed!')
+        return
+    end
+
+    file_handle.write(file_content)
+    file_handle.close()
+
+    files_received = files_received + 1
+    print('Progress: ' .. files_received .. '/' .. file_count .. ' files')
+
+    -- Send acknowledgment for this file
+    debug_print('Sending ack for file ' .. file_message.index)
+    rednet.send(hub_id, file_message.index, 'update_file_ack')
 end
 
-print("")
-print("========================================")
-print("  Update Summary")
-print("========================================")
-print("  Updated: " .. updated_count)
-print("  Skipped: " .. skipped_count)
-print("  Errors: " .. error_count)
-print("")
+-- ==============================================
+-- STEP 7: WAIT FOR COMPLETION MESSAGE
+-- ==============================================
+debug_print('Waiting for completion message...')
+local complete_sender, complete_message, complete_protocol = rednet.receive('update_complete', 10)
 
-if error_count > 0 then
-    print("⚠ Some files failed to update!")
-    print("  Check errors above")
-    print("")
-end
-
-if update_to_root then
-    -- Files already in root, just reboot
-    print("Files updated directly to root (no disk access)")
-    
-    -- Ensure startup file exists so turtle boots properly
-    if not fs.exists("/startup") and fs.exists("/startup.lua") then
-        print("Creating startup file...")
-        local startup_file = fs.open("/startup", "w")
-        if startup_file then
-            startup_file.write([[
--- Auto-generated startup file for World Eater Turtle
--- This file runs the turtle's main startup script
-
-if fs.exists('/startup.lua') then
-    shell.run('/startup.lua')
-else
-    print('startup.lua not found - run turtle.lua to initialize')
-end
-]])
-            startup_file.close()
-        end
-    end
-    
-    -- Ensure update wrapper exists
-    if not fs.exists("/update") then
-        print("Creating update wrapper...")
-        local update_wrapper = fs.open("/update", "w")
-        if update_wrapper then
-            update_wrapper.write([[
--- Update wrapper - runs the update script from root or disk
-if fs.exists('/update.lua') then
-    shell.run('/update.lua', ...)
-elseif fs.exists('/disk/turtle_files/update') then
-    shell.run('/disk/turtle_files/update', ...)
-else
-    print('Update script not found!')
-end
-]])
-            update_wrapper.close()
-        end
-    end
-    
-    print("Rebooting to apply changes...")
-    
-    -- Report update completion to hub
-    report_update_complete()
-    
-    -- Try to request re-initialization from hub before rebooting
-    local hub_id = nil
-    if fs.exists("/hub_id") then
-        local hub_id_file = fs.open("/hub_id", "r")
-        if hub_id_file then
-            hub_id = hub_id_file.readAll()
-            hub_id_file.close()
-        end
-    end
-    
-    if hub_id and rednet then
-        print("Requesting re-initialization from hub...")
-        local rednet_open = false
-        for _, side in pairs({'back', 'top', 'left', 'right'}) do
-            if peripheral.getType(side) == 'modem' then
-                rednet.open(side)
-                rednet_open = true
-                break
-            end
-        end
-        
-        if rednet_open then
-            pcall(function()
-                rednet.send(tonumber(hub_id), {
-                    action = 'reset_state',
-                }, 'mastermine')
-            end)
-            sleep(0.5)
-        end
-    end
-    
-    print("Note: Turtle will automatically re-initialize with hub after reboot")
-    sleep(2)
+if complete_protocol == 'update_complete' and complete_message.complete then
+    success_print('Update completed successfully!')
+    success_print('Received ' .. files_received .. ' files.')
+    print('Rebooting in 3 seconds...')
+    sleep(3)
     os.reboot()
 else
-    -- Normal flow: copy files from disk to root
-    print("Running turtle.lua to copy files to root...")
-    
-    -- Report update completion to hub before running turtle.lua
-    report_update_complete()
-    
-    -- Yield before final operations
-    os.queueEvent("yield")
-    os.pullEvent("yield")
-    
-    sleep(1)
-    
-    -- Run turtle.lua to copy updated files from disk to root
-    local turtle_lua_path = drive_path .. "/turtle.lua"
-    if fs.exists(turtle_lua_path) then
-        -- Use os.run to execute turtle.lua, which will handle copying files and rebooting
-        -- We need to pass the hub_id, so we'll read it from /hub_id if it exists
-        local hub_id = nil
-        if fs.exists("/hub_id") then
-            -- Yield before reading file
-            os.queueEvent("yield")
-            os.pullEvent("yield")
-            
-            local hub_id_file = fs.open("/hub_id", "r")
-            if hub_id_file then
-                hub_id = hub_id_file.readAll()
-                hub_id_file.close()
-            end
-        end
-        
-        -- Try to request re-initialization from hub before rebooting
-        -- This ensures the turtle gets the latest config after update
-        if hub_id and rednet then
-            print("Requesting re-initialization from hub...")
-            -- Try to open rednet if not already open
-            local rednet_open = false
-            for _, side in pairs({'back', 'top', 'left', 'right'}) do
-                if peripheral.getType(side) == 'modem' then
-                    rednet.open(side)
-                    rednet_open = true
-                    break
-                end
-            end
-            
-            if rednet_open then
-                -- Send reset request to hub (hub will detect session_id mismatch and re-initialize)
-                pcall(function()
-                    rednet.send(tonumber(hub_id), {
-                        action = 'reset_state',  -- Custom action to trigger re-init
-                    }, 'mastermine')
-                end)
-                sleep(0.5)  -- Brief delay to let message send
-            end
-        end
-        
-        print("Note: Turtle will automatically re-initialize with hub after reboot")
-        print("      to receive the latest configuration.")
-        sleep(2)
-        
-        -- Run turtle.lua to copy files and reboot
-        os.run({}, turtle_lua_path, hub_id)
-    else
-        print("Error: turtle.lua not found on disk!")
-        print("Update incomplete - turtle.lua missing")
-        sleep(2)
-    end
+    error_print('Did not receive completion confirmation.')
+    error_print('Files may have been updated, but something went wrong.')
+    print('Reboot manually if needed.')
 end

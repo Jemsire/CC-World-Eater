@@ -1,18 +1,19 @@
 -- SET LABEL
 os.setComputerLabel('Turtle ' .. os.getComputerID())
 
--- Load APIs in dependency order
-os.loadAPI('/apis/utilities.lua')        -- Base utilities (inf, str_xyz, distance, in_area, etc.)
-os.loadAPI('/apis/config.lua')          -- Configuration
-os.loadAPI('/apis/state.lua')           -- State management
-os.loadAPI('/apis/movement.lua')        -- Basic movement functions (up, down, forward, back, go, face, etc.)
-os.loadAPI('/apis/detection.lua')       -- Detection functions (detect_ore, scan, safedig, etc.)
-os.loadAPI('/apis/navigation.lua')      -- Navigation functions (go_to_home, go_to_block, etc.)
-os.loadAPI('/apis/item_management.lua') -- Item management (dump, prepare, etc.)
-os.loadAPI('/apis/mining.lua')          -- Mining functions (mine_to_bedrock, etc.)
-os.loadAPI('/apis/turtle_utilities.lua') -- Turtle utilities (calibrate, initialize, etc.)
--- Load actions.lua directly (not via os.loadAPI) to avoid wrapper table conflicts
-dofile('/apis/actions.lua')
+-- INITIALIZE APIS
+if fs.exists('/apis') then
+    fs.delete('/apis')
+end
+fs.makeDir('/apis')
+fs.copy('/config.lua', '/apis/config')
+fs.copy('/state.lua', '/apis/state')
+fs.copy('/basics.lua', '/apis/basics')
+fs.copy('/actions.lua', '/apis/actions')
+os.loadAPI('/apis/config')
+os.loadAPI('/apis/state')
+os.loadAPI('/apis/basics')
+os.loadAPI('/apis/actions')
 
 
 -- OPEN REDNET
@@ -34,8 +35,8 @@ end
 
 -- LAUNCH PROGRAMS AS SEPARATE THREADS
 multishell.launch({}, '/report.lua')
-multishell.launch({}, '/message_receiver.lua')
-multishell.launch({}, '/turtle_main.lua')
+multishell.launch({}, '/receive.lua')
+multishell.launch({}, '/mastermine.lua')
 multishell.setTitle(2, 'report')
 multishell.setTitle(3, 'receive')
-multishell.setTitle(4, 'turtle_main')
+multishell.setTitle(4, 'mastermine')

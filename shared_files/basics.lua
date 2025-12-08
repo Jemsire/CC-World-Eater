@@ -1,5 +1,3 @@
--- Utilities module (os.loadAPI style - sets globals)
-
 inf = 1e309
 
 bumps = {
@@ -60,9 +58,6 @@ end
 
 
 function in_area(xyz, area)
-    if not area or not xyz then
-        return false
-    end
     return xyz.x <= area.max_x and xyz.x >= area.min_x and xyz.y <= area.max_y and xyz.y >= area.min_y and xyz.z <= area.max_z and xyz.z >= area.min_z
 end
 
@@ -77,13 +72,3 @@ function in_location(xyzo, location)
     end
     return true
 end
-
-
--- Expose functions and variables as globals (os.loadAPI wraps them into API table)
--- Assign to global environment explicitly
-_G.inf = inf
-_G.dprint = dprint
-_G.str_xyz = str_xyz
-_G.distance = distance
-_G.in_area = in_area
-_G.in_location = in_location

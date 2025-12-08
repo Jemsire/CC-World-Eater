@@ -23,8 +23,11 @@ while true do
             state.pockets[sender].last_update = os.clock()
             
         elseif protocol == 'update_request' then
+            -- Handle update requests with file streaming to avoid 64KB rednet limit
             if fs.isDir(message) then
-                local update_package = {}
+                print('[Update] Directory found. Pulling files for turtle ' .. sender .. '.')
+                -- First, build a list of all files to send
+                local file_list = {}
                 local queue = {''}
                 while #queue > 0 do
                     dir_name = table.remove(queue)
@@ -35,22 +38,99 @@ while true do
                         if fs.isDir(sub_path_name) then
                             table.insert(queue, sub_dir_name)
                         else
-                            local file = fs.open(sub_path_name, 'r')
-                            if file then
-                                update_package[sub_dir_name] = file.readAll()
-                                file.close()
-                            end
+                            table.insert(file_list, sub_dir_name)
                         end
                     end
                 end
-                update_package.hub_id = os.getComputerID()
-                rednet.send(sender, update_package, 'update_package')
+
+                -- Store update info for this turtle
+                state.pending_updates[sender] = {
+                    file_list = file_list,
+                    current_index = 0,  -- Will be incremented to 1 when ready
+                    path = message,
+                    file_count = #file_list,
+                    ready = false
+                }
+
+                -- Send file list and count to turtle immediately (non-blocking)
+                print('[Update] Sent ' .. sender .. ' ' .. #file_list .. ' files list. Waiting for ready signal...')
+                rednet.send(sender, {
+                    hub_id = os.getComputerID(),
+                    file_count = #file_list,
+                    file_list = file_list
+                }, 'update_start')
             end
-        
-        elseif protocol == 'update_complete' then
-            -- Turtle has completed its update
-            if on_update_complete then
-                on_update_complete(sender)
+            
+        elseif protocol == 'update_ready' then
+            -- Turtle is ready to receive files, start streaming
+            local update_info = state.pending_updates[sender]
+            if update_info and not update_info.ready then
+                update_info.ready = true
+                update_info.current_index = 1
+                print('[Update] Turtle ' .. sender .. ' is ready. Starting file transfer...')
+                
+                -- Send first file
+                local file_name = update_info.file_list[1]
+                local file_path = fs.combine(update_info.path, file_name)
+                local file = fs.open(file_path, 'r')
+                if file then
+                    local content = file.readAll()
+                    file.close()
+                    
+                    rednet.send(sender, {
+                        index = 1,
+                        total = update_info.file_count,
+                        name = file_name,
+                        content = content
+                    }, 'update_file')
+                    print('[Update] Sent file 1/' .. update_info.file_count .. ' to turtle ' .. sender)
+                else
+                    rednet.send(sender, {error = 'Could not open file: ' .. file_name}, 'update_error')
+                    state.pending_updates[sender] = nil
+                end
+            end
+            
+        elseif protocol == 'update_file_ack' then
+            -- Turtle acknowledged receiving a file, send next file
+            local update_info = state.pending_updates[sender]
+            if update_info and update_info.ready then
+                -- Verify the ack matches expected index
+                local expected_index = update_info.current_index
+                if message == expected_index then
+                    update_info.current_index = update_info.current_index + 1
+                    
+                    -- Check if more files to send
+                    if update_info.current_index <= update_info.file_count then
+                        -- Send next file
+                        local file_name = update_info.file_list[update_info.current_index]
+                        local file_path = fs.combine(update_info.path, file_name)
+                        local file = fs.open(file_path, 'r')
+                        if file then
+                            local content = file.readAll()
+                            file.close()
+                            
+                            rednet.send(sender, {
+                                index = update_info.current_index,
+                                total = update_info.file_count,
+                                name = file_name,
+                                content = content
+                            }, 'update_file')
+                            print('[Update] Sent file ' .. update_info.current_index .. '/' .. update_info.file_count .. ' to turtle ' .. sender)
+                        else
+                            rednet.send(sender, {error = 'Could not open file: ' .. file_name}, 'update_error')
+                            state.pending_updates[sender] = nil
+                        end
+                    else
+                        -- All files sent, send completion signal
+                        rednet.send(sender, {complete = true}, 'update_complete')
+                        print('[Update] Completed file transfer to turtle ' .. sender)
+                        state.pending_updates[sender] = nil
+                    end
+                else
+                    -- Index mismatch, send error
+                    rednet.send(sender, {error = 'File index mismatch. Expected ' .. expected_index .. ', got ' .. message}, 'update_error')
+                    state.pending_updates[sender] = nil
+                end
             end
         end
         
