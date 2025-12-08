@@ -39,16 +39,6 @@ if not fs.exists(drive_path) then
     error("No disk drive found!")
 end
 
--- Load GitHub API helper
-local github_api_loaded = false
-local helper_path = "/github_api.lua"
-
-if fs.exists(helper_path) then
-    if os.loadAPI(helper_path) then
-        github_api_loaded = true
-    end
-end
-
 -- Get latest release tag and set GITHUB_BASE accordingly
 local latest_tag = nil
 if dev_mode then
@@ -59,7 +49,7 @@ if dev_mode then
 else
     -- Normal mode: Use latest release tag (version locked)
     print("Checking for latest release...")
-    latest_tag = get_latest_release_tag(GITHUB_REPO)
+    latest_tag = github_api.get_latest_release_tag(GITHUB_REPO)
     if latest_tag then
         -- Remove 'v' prefix if present (e.g., "v0.1.0" -> "0.1.0")
         local tag_for_url = string.gsub(latest_tag, "^v", "")
@@ -74,13 +64,29 @@ else
 end
 
 -- Download file list from GitHub using API
-local function get_hub_files()
+local function get_files()
     local ref_to_use = latest_tag or GITHUB_BRANCH
-    local tree = get_file_tree(GITHUB_REPO, ref_to_use)
+    local tree = github_api.get_file_tree(GITHUB_REPO, ref_to_use)
     
     if not tree then
         error("Failed to retrieve file list from GitHub API. Please check your internet connection and try again.")
     end
+
+    -- List of paths to get
+    paths_to_get = {
+        "hub_files/",
+        "turtle_files/",
+        "pocket_files/",
+        "shared_files/",
+    }
+
+    -- List of items to get so we dont download the entire directory
+    items_to_get = {
+        "hub.lua",
+        "turtle.lua",
+        "pocket.lua",
+        "install.lua",
+    }
 
     -- Collect files
     local files = {}
@@ -88,13 +94,26 @@ local function get_hub_files()
         -- GitHub API returns "blob" for files and "tree" for directories
         if item.type == "blob" and item.path then
             local path = item.path
-            -- Skip config files unless force_config is enabled
-            if not config_files[path] or force_config then
-                table.insert(files, path)
+
+            -- Check if the path is in the list of paths to get
+            for _, path_to_get in ipairs(paths_to_get) do
+                if path:find(path_to_get) then
+                    -- Check if the item is in the list of config files to ignore or if force_config is enabled
+                    if not config_files[path] or force_config then
+                        table.insert(files, path)
+                    end
+                    break
+                end
+            end
+
+            -- Check if the item is in the list of items to get
+            for _, item_to_get in ipairs(items_to_get) do
+                if path:find(item_to_get) then
+                    table.insert(files, path)
+                end
             end
         end
     end
-    
     return files
 end
 

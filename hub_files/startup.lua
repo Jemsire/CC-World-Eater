@@ -9,9 +9,11 @@ fs.makeDir('/apis')
 fs.copy('/config.lua', '/apis/config')
 fs.copy('/state.lua', '/apis/state')
 fs.copy('/basics.lua', '/apis/basics')
+fs.copy('/github_api.lua', '/apis/github_api')
 os.loadAPI('/apis/config')
 os.loadAPI('/apis/state')
 os.loadAPI('/apis/basics')
+os.loadAPI('/apis/github_api')
 
 
 -- OPEN REDNET
