@@ -6,8 +6,8 @@
 return {
     major = 0,
     minor = 3,
-    hotfix = 1,
+    hotfix = 2,
     dev_suffix = "-DEV",
-    dev = true
+    dev = false
 }
 

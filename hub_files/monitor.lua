@@ -111,10 +111,8 @@ end
 
 
 
--- Cache for GitHub version check (check every 30 seconds)
+-- Cache for GitHub version check (only checked once on startup)
 local github_version_cache = nil
-local github_version_cache_time = 0
-local GITHUB_CHECK_INTERVAL = 30  -- seconds
 
 function is_hub_up_to_date()
     local hub_version = get_hub_version()
@@ -122,19 +120,9 @@ function is_hub_up_to_date()
         return false
     end
     
-    -- Check cache (only check GitHub every 30 seconds to avoid lag)
-    local current_time = os.clock()
-    if not github_version_cache or (current_time - github_version_cache_time) > GITHUB_CHECK_INTERVAL then
-        if github_api and http then
-            github_version_cache = github_api.get_latest_release_version("Jemsire/CC-World-Eater")
-            github_version_cache_time = current_time
-        else
-            github_version_cache = nil
-        end
-    end
-    
+    -- Use cached version (only checked once on startup)
     if not github_version_cache then
-        return nil  -- Unknown (can't check)
+        return nil  -- Unknown (not checked yet or can't check)
     end
     
     local comparison = github_api.compare_versions(hub_version, github_version_cache)
@@ -1041,6 +1029,11 @@ function main()
     monitor_zoom_level = config.default_monitor_zoom_level
     
     init_elements()
+    
+    -- Check GitHub version once on startup
+    if github_api and http then
+        github_version_cache = github_api.get_latest_release_version("Jemsire/CC-World-Eater")
+    end
     
     while not state.mine do
         sleep(0.5)
