@@ -132,8 +132,8 @@ The World Eater system is highly configurable through `hub_files/config.lua`. Ke
 - **`mine_entrance`**: Central reference point for the entire setup (center of prep area, y should be 1 block above surface)
   ```lua
     Y
-#### ####
-#### ####
+  #### ####
+  #### ####
   mine_entrance = {x = 2141, y = 132, z = -130}
   ```
 
