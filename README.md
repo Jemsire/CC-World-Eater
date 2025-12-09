@@ -29,7 +29,7 @@ Lower chest is the dump chest so make sure it has lots of space or a storage sys
 ### Main Computer (Setup)
 ![Main Computer (Setup)](assets/images/computer-setup.png)
 ```
-Drive MUST be one block below computer
+Drive should be one block below computer
 Wireless modem should be on top to save space.
 Monitors are 4 long by 3 tall (4x3)
 ```
@@ -53,23 +53,25 @@ Monitors are 4 long by 3 tall (4x3)
 4. Type `install.lua` and hit enter to run (installs latest stable release by default)
 5. Follow the installation prompts to set up your World Eater system
 
-### Dev Mode Installation (⚠️ Unsupported)
+### Dev Mode Installation/Updates (⚠️ Unsupported)
 
-**⚠️ WARNING: Dev mode installs are UNSUPPORTED and may have breaking changes!**
+**⚠️ WARNING: Dev mode installs/updates are UNSUPPORTED and may have breaking changes!**
 
-If you want to install the latest commits from the main branch (dev mode) instead of the latest stable release:
+If you want to install/update to the latest commits from the main branch (dev mode) instead of the latest stable release:
 
 ```bash
 install.lua dev
+OR
+update dev
 ```
 
 **Important Notes:**
-- Dev mode installs the latest commits from the `main` branch, which may include untested or incomplete features
+- Dev mode installs/updates to the latest commits from the `main` branch, which may include untested or incomplete features
 - **No support will be provided for dev installs** - use at your own risk
-- Dev installs may have breaking changes that require manual fixes
+- Dev installs/updates may have breaking changes that require manual fixes
 - Configuration files may be incompatible between dev versions
-- Always backup your configuration before installing dev updates
-- If you encounter issues with a dev install, you must revert to a stable release to receive support
+- Always backup your configuration before installing/updating to dev commits
+- If you encounter issues with a dev install/update, you must revert to a stable release to receive support
 
 **When to use dev mode:**
 - You are a developer contributing to the project
@@ -122,13 +124,16 @@ The World Eater system is highly configurable through `hub_files/config.lua`. Ke
 
 ### Mining Area Configuration
 
-- **`mining_radius`**: Set a circular mining radius (in blocks) from the mining center. Set to `nil` for unlimited mining.
+- **`mining_radius`**: Set a square mining radius (in blocks) from the mining center. Set to `nil` for unlimited mining.
   ```lua
   mining_radius = 100  -- Mines 100 blocks radius (200 block diameter)
   ```
 
 - **`mine_entrance`**: Central reference point for the entire setup (center of prep area, y should be 1 block above surface)
   ```lua
+      Y
+  #### ####
+  #### ####
   mine_entrance = {x = 2141, y = 132, z = -130}
   ```
 
@@ -146,17 +151,17 @@ The World Eater system is highly configurable through `hub_files/config.lua`. Ke
 ### Protected Blocks
 
 Blocks containing these strings will not be mined (turtles navigate around them):
-- `computer`, `chest`, `spawner`, `beacon`, `enchanting_table`, `command_block`, `bedrock`, etc.
+- `computer`, `chest`, `spawner`, `beacon`, `enchanting_table`, `command_block`, etc.
 
 Configure in `dig_disallow` table in `hub_files/config.lua`.
 
 
 ## 📺 Video Tutorials
 
-### Description Video
+### Showcase Video
 **Coming Soon**
 
-### Installation Tutorial
+### Installation and Setup Tutorial
 **Coming Soon**
 
 ## 📸 Screenshots
@@ -189,13 +194,11 @@ Control your World Eater system with these commands:
 - `clear <#>` - Clear a turtle's inventory
 - `halt <#>` - Halt a turtle's current operation
 - `return <#>` - Return a turtle to base
-
-**Note:** Turtles are updated automatically when the hub runs `update` - no individual turtle update command needed.
-
+- `update <#>` - Updates a turtle
 ### Hub Control
-- `update` - Update hub computer code and all turtles (when run without turtle ID)
-- `reboot` - Reboot hub computer (when run without turtle ID)
-- `shutdown` - Shutdown hub computer (when run without turtle ID)
+- `update [dev,force,config]` - Update hub computer code - [] Optional
+- `reboot` - Reboot hub computer
+- `shutdown` - Shutdown hub computer
 
 > **Tip:** Use `*` as notation for all turtles (e.g., `reboot *` reboots all turtles)
 
@@ -203,59 +206,11 @@ Control your World Eater system with these commands:
 
 All systems can be updated directly from the GitHub repository. Updates automatically preserve your configuration files.
 
-### Hub Computer Update (Updates Hub + All Turtles)
+Use the main screen or commands above to update the hub. This will update the hub computers disk to latest stable release and reboot to update the hub. The turtles will need updated AFTER the hub updates
 
-From the hub computer, simply type:
-```
-update
-```
+### Major Release Updates
 
-This will update both the hub computer and all connected turtles automatically to the latest stable release. The update system will:
-1. Queue all turtles for update
-2. Send each turtle home (if not already there)
-3. Have turtles navigate to the disk drive one at a time
-4. Update each turtle sequentially (prevents conflicts)
-5. Update the hub computer after all turtles complete
-
-**Note:** Turtles must be able to navigate back to the hub area for updates. If a turtle is too far away or stuck, you may need to manually return it first using the `return <#>` command.
-
-To update via the update script directly (hub only):
-```lua
-disk/hub_files/update
-```
-
-To also update config files (not recommended unless you want to reset your settings):
-```lua
-disk/hub_files/update force-config
-```
-
-### Dev Mode Updates (⚠️ Unsupported)
-
-**⚠️ WARNING: Dev mode updates are UNSUPPORTED and may have breaking changes!**
-
-To update to the latest commits from the main branch (dev mode) instead of the latest stable release:
-
-```lua
-disk/hub_files/update dev
-```
-
-**Important Notes:**
-- Dev mode updates install the latest commits from the `main` branch, which may include untested or incomplete features
-- **No support will be provided for dev updates** - use at your own risk
-- Dev updates may have breaking changes that require manual fixes
-- Configuration files may be incompatible between dev versions
-- Always backup your configuration before updating to dev
-- If you encounter issues with a dev update, you must revert to a stable release to receive support
-
-**When to use dev mode:**
-- You are a developer contributing to the project
-- You want to test the latest features before they are released
-- You understand the risks and are comfortable troubleshooting issues yourself
-
-**When NOT to use dev mode:**
-- You want a stable, production-ready system
-- You need support for issues
-- You are not comfortable troubleshooting breaking changes
+The updater will check if the update will be a major release shown by the first number in the version: MAJOR.MINOR.HOTFIX. If a major release is detected it will update WITH force config on meaning any changes you made WILL be lost. A setup wizard will be run after to help reconfigure the config but manual changes may need to be made again.
 
 ### Turtle Update
 
@@ -360,6 +315,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - CC Tweaked for the amazing ComputerCraft implementation
 - Advanced Peripherals / Peripherals Plus One for enhanced turtle capabilities
 - All the community members who have tested and provided feedback
+- Massive thanks to any contributors who took the time to help improve this program for everyone!
 
 ---
 
