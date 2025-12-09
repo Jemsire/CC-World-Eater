@@ -225,7 +225,7 @@ Turtles can be updated using `update` in their terminals or using the menu to up
 
 ### Floppy Disk Size Limit
 
-ComputerCraft has a default limit of 512KB per floppy disk. World Eater currently uses approximately 213KB total, which fits comfortably on a single disk with plenty of room for future growth (~299KB remaining).
+ComputerCraft has a default limit of 512KB per floppy disk. World Eater currently uses approximately **199.71 KB** (0.20 MB) for all code files, which fits comfortably on a single disk with plenty of room for future growth (~312KB remaining).
 
 If you need more space, you can increase the floppy disk size limit in the mod's config file.
 
@@ -264,41 +264,49 @@ Hopefully that covers a lot of it. Again, let me know if you still can't get the
 
 ## 📁 Project Structure
 
+**Project Statistics:**
+- **Total Lines of Code:** 4,812 lines
+- **Total Project Size:** 199.71 KB (0.20 MB)
+
 ```
 CC-World-Eater/
-├── hub_files/          # Hub computer files
-│   ├── config.lua      # Hub configuration (mining settings, locations, etc.)
-│   ├── monitor.lua     # Status monitoring and UI
-│   ├── worldeater.lua  # Mining assignment and block tracking
-│   ├── github_api.lua  # GitHub API helper functions
-│   ├── events.lua     # Event handling and turtle communication
-│   ├── user.lua       # User input handling
-│   ├── report.lua     # Status reporting
-│   ├── state.lua      # State management
-│   ├── startup.lua    # Hub startup script
-│   └── ...
-├── turtle_files/       # Turtle computer files
-│   ├── config.lua      # Turtle configuration
-│   ├── mastermine.lua # Main turtle logic and request processing
-│   ├── actions.lua     # Mining actions (go_to_block, mine_to_bedrock, etc.)
-│   ├── receive.lua    # Rednet message receiving
-│   ├── report.lua     # Status reporting
-│   ├── state.lua      # State management
-│   ├── startup.lua    # Turtle startup script
-│   └── ...
-├── pocket_files/       # Pocket computer files
-│   ├── info.lua       # Pocket computer info
-│   ├── report.lua     # Status reporting
-│   ├── startup.lua    # Pocket startup script
-│   └── ...
-├── shared_files/       # Shared files between hub and turtles
-│   ├── version.lua     # Version tracking (currently v0.3.2)
-│   └── basics.lua     # Basic utility functions
-├── assets/             # Images and assets for documentation
-│   └── images/         # Screenshots and setup images
-├── hub.lua             # Hub bootstrap script
-├── turtle.lua          # Turtle bootstrap script
-└── pocket.lua          # Pocket bootstrap script
+├── hub_files/          # Hub computer files (147.51 KB total)
+│   ├── config.lua      # Hub configuration (10.89 KB, 288 lines)
+│   ├── events.lua      # Event handling and turtle communication (12.02 KB, 233 lines)
+│   ├── github_api.lua  # GitHub API helper functions (5.25 KB, 152 lines)
+│   ├── monitor.lua     # Status monitoring and UI (39.12 KB, 960 lines)
+│   ├── report.lua     # Status reporting (0.49 KB, 20 lines)
+│   ├── startup.lua    # Hub startup script (1.17 KB, 41 lines)
+│   ├── state.lua      # State management (0.17 KB, 5 lines)
+│   ├── user.lua       # User input handling (0.11 KB, 4 lines)
+│   ├── whosmineisitanyway.lua  # Mining assignment logic (29.65 KB, 762 lines)
+│   ├── worldeater.lua  # Main world eater coordination (27.84 KB, 704 lines)
+│   ├── update          # Update script (17.9 KB, 461 lines)
+│   └── updated         # Update flag file (0 KB, 0 lines)
+├── turtle_files/       # Turtle computer files (32.78 KB total)
+│   ├── actions.lua     # Mining actions (go_to_block, mine_to_bedrock, etc.) (18.84 KB, 552 lines)
+│   ├── config.lua      # Turtle configuration (0 KB, 0 lines)
+│   ├── mastermine.lua # Main turtle logic and request processing (1.18 KB, 33 lines)
+│   ├── receive.lua    # Rednet message receiving (0.36 KB, 13 lines)
+│   ├── report.lua     # Status reporting (1.67 KB, 47 lines)
+│   ├── startup.lua    # Turtle startup script (1.06 KB, 37 lines)
+│   ├── state.lua      # State management (0.04 KB, 3 lines)
+│   ├── update         # Update script (8.59 KB, 221 lines)
+│   └── updated        # Update flag file (0 KB, 0 lines)
+├── pocket_files/       # Pocket computer files (2.12 KB total)
+│   ├── info.lua       # Pocket computer info (0.76 KB, 25 lines)
+│   ├── report.lua     # Status reporting (0.27 KB, 13 lines)
+│   ├── startup.lua    # Pocket startup script (0.44 KB, 16 lines)
+│   ├── user.lua       # User input handling (0.11 KB, 4 lines)
+│   ├── update         # Update script (0.54 KB, 16 lines)
+│   └── updated        # Update flag file (0 KB, 0 lines)
+├── shared_files/       # Shared files between hub and turtles (13.12 KB total)
+│   ├── globals.lua     # Global constants and shared variables (3.6 KB, 165 lines)
+│   ├── lua_utils.lua   # Basic utility functions (9.09 KB, 307 lines)
+│   └── version.lua     # Version tracking (0.43 KB, 13 lines)
+├── hub.lua             # Hub bootstrap script (1.24 KB, 33 lines)
+├── turtle.lua          # Turtle bootstrap script (0.68 KB, 23 lines)
+└── pocket.lua          # Pocket bootstrap script (0.19 KB, 5 lines)
 ```
 
 ## 🤝 Contributing
