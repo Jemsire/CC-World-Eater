@@ -1,15 +1,15 @@
 -- WORLD EATER: Hub Update Script
 -- Downloads files from GitHub and updates the hub system
--- Usage: update [dev] [force] [force-config]
+-- Usage: update [dev] [force] [config]
 --   dev: If provided, will use latest commits from main branch (dev mode)
 --   force: If provided, will update even if versions match
---   force-config: If provided, will also update config files
+--   config: If provided, will completely replace config files (ignores merge)
 
 local GITHUB_REPO = "Jemsire/CC-World-Eater"
 local GITHUB_BRANCH = "main"  -- Fallback if no releases found
 local GITHUB_BASE = nil  -- Will be set after getting latest release tag
 
--- Check for dev, force and force-config arguments
+-- Check for dev, force and config arguments
 local dev_mode = false
 local force_update = false
 local force_config = false
@@ -23,14 +23,21 @@ if arg then
             print("Force update mode: Will update even if versions match")
         elseif arg_val == "config" then
             force_config = true
-            print("Force update mode: Config files will be updated")
+            print("Force config mode: Config files will be completely replaced")
         end
     end
 end
 
--- Files to exclude from update (unless force-config is set)
+-- Files to handle specially during update (config merging)
 local config_files = {
     ["hub_files/config.lua"] = true,
+}
+
+-- Keys where the user's value should completely replace the default (no merging)
+-- These are typically list-like or set-like tables where merging doesn't make sense
+local replace_keys = {
+    dig_disallow = true,  -- User's block list replaces default entirely
+    fuelnames = true,     -- User's fuel list replaces default entirely
 }
 
 -- Determine drive path first (needed for helper loading)
@@ -51,8 +58,6 @@ else
     print("Checking for latest release...")
     latest_tag = github_api.get_latest_release_tag(GITHUB_REPO)
     if latest_tag then
-        -- Remove 'v' prefix if present (e.g., "v0.1.0" -> "0.1.0")
-        local tag_for_url = string.gsub(latest_tag, "^v", "")
         GITHUB_BASE = "https://raw.githubusercontent.com/" .. GITHUB_REPO .. "/" .. latest_tag
         print("Using latest release: " .. latest_tag)
     else
@@ -73,7 +78,7 @@ local function get_files()
     end
 
     -- List of paths to get
-    paths_to_get = {
+    local paths_to_get = {
         "hub_files/",
         "turtle_files/",
         "pocket_files/",
@@ -81,7 +86,7 @@ local function get_files()
     }
 
     -- List of items to get so we dont download the entire directory
-    items_to_get = {
+    local items_to_get = {
         "hub.lua",
         "turtle.lua",
         "pocket.lua",
@@ -98,10 +103,7 @@ local function get_files()
             -- Check if the path is in the list of paths to get
             for _, path_to_get in ipairs(paths_to_get) do
                 if path:find(path_to_get) then
-                    -- Check if the item is in the list of config files to ignore or if force_config is enabled
-                    if not config_files[path] or force_config then
-                        table.insert(files, path)
-                    end
+                    table.insert(files, path)
                     break
                 end
             end
@@ -129,61 +131,91 @@ print("========================================")
 print("  World Eater Update")
 print("========================================")
 
--- Function to format version table as string "MAJOR.MINOR.HOTFIX" or "MAJOR.MINOR.HOTFIX-DEV"
--- Note: Only shows -DEV if dev == true (dev_suffix is for metadata only)
-local function format_version(version)
-    if version and type(version) == "table" then
-        local version_str = string.format("%d.%d.%d", version.major or 0, version.minor or 0, version.hotfix or 0)
-        -- Add DEV suffix only if dev == true (not dev_suffix, which is just metadata)
-        if version.dev == true then
-            version_str = version_str .. "-DEV"
-        end
-        return version_str
-    end
-    return nil
-end
-
-
 -- Function to get local version
 local function get_local_version()
     local version_path = "/version.lua"
-    
-    if fs.exists(version_path) then
-        local version_file = fs.open(version_path, "r")
-        if version_file then
-            local version_code = version_file.readAll()
-            version_file.close()
-            local version_func = load(version_code)
-
-            if version_func then
-                local success, version = pcall(version_func)
-                if success and version and type(version) == "table" then
-                    return version
-                end
-            end
-        end
-    end
-    return nil
+    return lua_utils.load_file(version_path)
 end
 
 -- Function to get remote version from GitHub
 local function get_remote_version()
-    -- Use GITHUB_BASE which is already set based on dev_mode or latest_tag
     local url = GITHUB_BASE .. "/shared_files/version.lua"
     local response = http.get(url)
     if response then
         local content = response.readAll()
         response.close()
-        local version_func = load(content)
-        if version_func then
-            local success, version = pcall(version_func)
-            if success and version and type(version) == "table" then
-                return version
-            end
-        end
+        return lua_utils.load_string(content)
     end
     return nil
 end
+
+---==[ CONFIG MERGING ]==---
+
+-- Function to update a config file by merging old values into new structure
+-- Returns: "updated" if merged, "replaced" if force replaced, "new" if fresh install, nil if error
+local function update_config_file(filepath, url, dest_path)
+    print("  Updating config: " .. filepath)
+    
+    -- Download new config from GitHub
+    local response = http.get(url)
+    if not response then
+        print("    ✗ Failed to download new config from GitHub")
+        return nil
+    end
+    
+    local new_content = response.readAll()
+    response.close()
+    
+    -- If force_config is set, just write the new config directly
+    if force_config then
+        if lua_utils.write_file(dest_path, new_content) then
+            print("    ✓ Config replaced (force mode)")
+            return "replaced"
+        else
+            print("    ✗ Failed to write config file")
+            return nil
+        end
+    end
+    
+    local new_config = lua_utils.load_string(new_content)
+    if not new_config then
+        print("    ✗ Failed to parse new config from GitHub")
+        return nil
+    end
+    
+    -- Load existing local config
+    local old_config = lua_utils.load_file(dest_path)
+    
+    local final_config
+    local result_type
+    if old_config then
+        -- Merge old values into new structure
+        final_config = lua_utils.merge_tables(new_config, old_config, replace_keys)
+        print("    ✓ Merged existing settings into new config structure")
+        result_type = "updated"
+    else
+        -- No existing config, use new config as-is
+        final_config = new_config
+        print("    ✓ No existing config, using defaults")
+        result_type = "new"
+    end
+    
+    -- Build config file content
+    local config_content = "-- World Eater Configuration\n"
+    config_content = config_content .. "-- Auto-merged during update - your settings have been preserved\n"
+    config_content = config_content .. "-- New config options (if any) have been added with default values\n"
+    config_content = config_content .. "return " .. lua_utils.serialize_table(final_config) .. "\n"
+    
+    -- Write merged config
+    if lua_utils.write_file(dest_path, config_content) then
+        return result_type
+    else
+        print("    ✗ Failed to write config file")
+        return nil
+    end
+end
+
+---==[ VERSION CHECKING ]==---
 
 -- Check versions BEFORE updating - this must happen first!
 print("Checking for updates...")
@@ -198,8 +230,8 @@ if not remote_version then
     return
 end
 
-local local_str = format_version(local_version)
-local remote_str = format_version(remote_version)
+local local_str = lua_utils.format_version(local_version)
+local remote_str = lua_utils.format_version(remote_version)
 
 print("Current version: " .. (local_str or "not found"))
 if dev_mode then
@@ -225,7 +257,7 @@ if local_version then
                 print("")
             else
                 print("Already up-to-date! Versions match (" .. local_str .. ").")
-                print("(Use 'update force' to force update, 'update dev' for dev mode, or 'update config' to update config files)")
+                print("(Use 'update force' to force update, 'update dev' for dev mode, or 'update config' to force replace config files)")
                 return
             end
         elseif comparison and comparison > 0 then
@@ -303,6 +335,7 @@ print("Continuing in 5 seconds...")
 sleep(5)
 
 local updated_count = 0
+local config_count = 0
 local skipped_count = 0
 local error_count = 0
 
@@ -312,14 +345,21 @@ for _, filepath in ipairs(files) do
     os.queueEvent("yield")
     os.pullEvent("yield")
     
-    -- Check if we should skip this file
-    if not force_config and config_files[filepath] then
-        print("  Skipping (config): " .. filepath)
-        skipped_count = skipped_count + 1
+    local url = GITHUB_BASE .. "/" .. filepath
+    local dest_path = drive_path .. "/" .. filepath
+    
+    -- Check if this is a config file
+    if config_files[filepath] then
+        -- Use config merging (preserves user settings while getting new structure)
+        local result = update_config_file(filepath, url, dest_path)
+        if result then
+            config_count = config_count + 1
+            updated_count = updated_count + 1
+        else
+            error_count = error_count + 1
+        end
     else
-        local url = GITHUB_BASE .. "/" .. filepath
-        local dest_path = drive_path .. "/" .. filepath
-        
+        -- Regular file handling
         print("  Downloading: " .. filepath)
         
         local response = http.get(url)
@@ -338,47 +378,30 @@ for _, filepath in ipairs(files) do
             end
             response.close()
             
-            -- Create directory if needed (for nested folders like apis)
-            local parent_dir = string.match(dest_path, "^(.-)[^/\\]*$")
-            if parent_dir and parent_dir ~= "" and not fs.exists(parent_dir) then
-                fs.makeDir(parent_dir)
-            end
-            
-            -- Write file (overwrites existing, matching installer behavior)
-            local file = fs.open(dest_path, "w")
-            if not file then
-                print("    ✗ Failed to open file for writing: " .. dest_path)
-                error_count = error_count + 1
-            else
-                file.write(content)
-                file.close()
-                
-                -- Yield after file operations (matching installer)
-                os.queueEvent("yield")
-                os.pullEvent("yield")
-                
+            -- Write file using lua_utils
+            if lua_utils.write_file(dest_path, content) then
                 -- Verify file was written and check content
-                if fs.exists(dest_path) then
+                if lua_utils.file_exists(dest_path) then
                     -- For monitor.lua, verify key content was downloaded
                     if filepath == "hub_files/monitor.lua" then
-                        local verify_file = fs.open(dest_path, "r")
-                        if verify_file then
-                            local content_check = verify_file.readAll()
-                            verify_file.close()
-                            if content_check:find("term%.write%('WORLD'") then
-                                print("    ✓ Updated successfully (verified)")
-                            else
-                                print("    ⚠ Updated but content verification failed")
-                                print("      (File may be outdated on GitHub)")
-                            end
+                        local content_check = lua_utils.read_file(dest_path)
+                        if content_check and content_check:find("term%.write%('WORLD'") then
+                            print("    ✓ Updated successfully (verified)")
+                        else
+                            print("    ⚠ Updated but content verification failed")
+                            print("      (File may be outdated on GitHub)")
                         end
+                    else
+                        print("    ✓ Updated successfully")
                     end
-                    print("    ✓ Updated successfully")
                     updated_count = updated_count + 1
                 else
                     print("    ✗ File write verification failed")
                     error_count = error_count + 1
                 end
+            else
+                print("    ✗ Failed to write file: " .. dest_path)
+                error_count = error_count + 1
             end
         else
             print("    ✗ Failed to download from GitHub")
@@ -392,9 +415,12 @@ print("========================================")
 print("  Update Complete")
 print("========================================")
 print(string.format("  Updated: %d files", updated_count))
+if config_count > 0 then
+    print(string.format("  Configs merged: %d files", config_count))
+    print("  (User settings preserved, new options added)")
+end
 if skipped_count > 0 then
-    print(string.format("  Skipped (configs): %d files", skipped_count))
-    print("  (Use 'update force-config' to update config files)")
+    print(string.format("  Skipped: %d files", skipped_count))
 end
 if error_count > 0 then
     print(string.format("  Errors: %d files", error_count))
@@ -420,35 +446,29 @@ if updated_count > 0 and error_count == 0 and remote_version then
     
     local version_path = drive_path .. "/shared_files/version.lua"
     
-    -- Create directory if needed
-    local dir = string.match(version_path, "^(.-)[^/\\]*$")
-    if dir and dir ~= "" then
-        fs.makeDir(dir)
+    -- Build version file content
+    local version_content = "-- World Eater Version\n"
+    version_content = version_content .. "-- This version number matches the version from GitHub\n"
+    version_content = version_content .. "-- Version format: semantic versioning MAJOR.MINOR.HOTFIX\n"
+    if dev_mode then
+        version_content = version_content .. "-- DEV MODE: This version has -DEV suffix\n"
     end
+    version_content = version_content .. "-- Returns: {major=1, minor=0, hotfix=0, dev_suffix=\"-DEV\"}\n"
+    version_content = version_content .. "return {\n"
+    version_content = version_content .. "    major = " .. tostring(new_version.major) .. ",\n"
+    version_content = version_content .. "    minor = " .. tostring(new_version.minor) .. ",\n"
+    version_content = version_content .. "    hotfix = " .. tostring(new_version.hotfix) .. ",\n"
+    if dev_mode then
+        version_content = version_content .. "    dev_suffix = \"-DEV\",\n"
+        version_content = version_content .. "    dev = true\n"
+    else
+        version_content = version_content .. "    dev_suffix = nil,\n"
+        version_content = version_content .. "    dev = false\n"
+    end
+    version_content = version_content .. "}\n"
     
-    local version_file = fs.open(version_path, "w")
-    if version_file then
-        version_file.write("-- World Eater Version\n")
-        version_file.write("-- This version number matches the version from GitHub\n")
-        version_file.write("-- Version format: semantic versioning MAJOR.MINOR.HOTFIX\n")
-        if dev_mode then
-            version_file.write("-- DEV MODE: This version has -DEV suffix\n")
-        end
-        version_file.write("-- Returns: {major=1, minor=0, hotfix=0, dev_suffix=\"-DEV\"}\n")
-        version_file.write("return {\n")
-        version_file.write("    major = " .. tostring(new_version.major) .. ",\n")
-        version_file.write("    minor = " .. tostring(new_version.minor) .. ",\n")
-        version_file.write("    hotfix = " .. tostring(new_version.hotfix) .. ",\n")
-        if dev_mode then
-            version_file.write("    dev_suffix = \"-DEV\",\n")
-            version_file.write("    dev = true\n")
-        else
-            version_file.write("    dev_suffix = nil,\n")
-            version_file.write("    dev = false\n")
-        end
-        version_file.write("}\n")
-        version_file.close()
-        local version_str = format_version(new_version)
+    if lua_utils.write_file(version_path, version_content) then
+        local version_str = lua_utils.format_version(new_version)
         if dev_mode then
             print(string.format("  Version updated to: %s (dev mode)", version_str))
         else
@@ -463,7 +483,7 @@ sleep(1)
 
 -- Run hub.lua to copy updated files from disk to root
 local hub_lua_path = drive_path .. "/hub.lua"
-if fs.exists(hub_lua_path) then
+if lua_utils.file_exists(hub_lua_path) then
     -- Use os.run to execute hub.lua, which will handle copying files and rebooting
     os.run({}, hub_lua_path)
 else

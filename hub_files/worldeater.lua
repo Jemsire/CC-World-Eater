@@ -6,10 +6,6 @@
 -- starting area to bedrock.
 -- ==============================================
 
-inf = basics.inf
-str_xyz = basics.str_xyz
-
-
 -- ==============================================
 -- MINE GRID MANAGEMENT
 -- ==============================================
@@ -680,7 +676,7 @@ function command_turtles()
                         -- Turtle is underground, send it up
                         add_task(turtle, {action = 'go_to_mine_exit'})
 
-                    elseif not basics.in_area(turtle.data.location, config.locations.control_room_area) then
+                    elseif not globals.in_area(turtle.data.location, config.locations.control_room_area) then
                         -- Turtle is outside control room, halt it
                         halt(turtle)
 

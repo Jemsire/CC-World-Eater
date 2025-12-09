@@ -1,93 +1,15 @@
 -- Current active tab
 local current_tab = "menu" -- 'menu', 'map', 'turtles', 'stats'
 
-local menu_lines = {
-    "##### ##### ##### ##### #####",
-    "#     #   #   #   #     #   #",
-    "###   #####   #   ###   #### ",
-    "#     #   #   #   #     #  # ",
-    "##### #   #   #   ##### #   #"
-}
-
-decimals = {
-    [0] = {
-        "#####",
-        "#   #",
-        "#   #",
-        "#   #",
-        "#####"
-    },
-    [1] = {
-        "###  ",
-        "  #  ",
-        "  #  ",
-        "  #  ",
-        "#####"
-    },
-    [2] = {
-        "#####",
-        "    #",
-        "#####",
-        "#    ",
-        "#####"
-    },
-    [3] = {
-        "#####",
-        "    #",
-        "#####",
-        "    #",
-        "#####"
-    },
-    [4] = {
-        "#   #",
-        "#   #",
-        "#####",
-        "    #",
-        "    #"
-    },
-    [5] = {
-        "#####",
-        "#    ",
-        "#####",
-        "    #",
-        "#####"
-    },
-    [6] = {
-        "#####",
-        "#    ",
-        "#####",
-        "#   #",
-        "#####"
-    },
-    [7] = {
-        "#####",
-        "    #",
-        "    #",
-        "    #",
-        "    #"
-    },
-    [8] = {
-        "#####",
-        "#   #",
-        "#####",
-        "#   #",
-        "#####"
-    },
-    [9] = {
-        "#####",
-        "#   #",
-        "#####",
-        "    #",
-        "    #"
-    }
-}
-
 -- Cache for GitHub version check (only checked once on startup)
 local github_version_cache = nil
 
 -- Store selected turtle for turtles tab
 local turtles_tab_selected = 1
 local turtles_tab_ids = {}
+
+-- Store scroll offset for stats turtle visualization
+local stats_turtle_scroll = 0
 
 -- Map turtles lookup (used by draw_monitor and touch_monitor)
 local turtles = {}
@@ -192,27 +114,6 @@ local function parse_and_draw_colored_text(text)
     local default_text_color = colors.white
     local default_bg_color = nil
     
-    local color_codes = {
-        ["0"] = colors.black,
-        ["1"] = colors.blue,
-        ["2"] = colors.green,
-        ["3"] = colors.cyan,
-        ["4"] = colors.red,
-        ["5"] = colors.purple,
-        ["6"] = colors.orange,
-        ["7"] = colors.lightGray,
-        ["8"] = colors.gray,
-        ["9"] = colors.lightBlue,
-        ["a"] = colors.lime,
-        ["b"] = colors.brown,
-        ["c"] = colors.pink,
-        ["d"] = colors.magenta,
-        ["e"] = colors.yellow,
-        ["f"] = colors.white,
-        ["r"] = default_text_color,
-        ["t"] = nil
-    }
-    
     local current_text_color = default_text_color
     local current_bg_color = default_bg_color
     local pos = 1
@@ -229,14 +130,14 @@ local function parse_and_draw_colored_text(text)
                     current_bg_color = nil
                 elseif code1 == "r" then
                     current_bg_color = default_bg_color
-                elseif color_codes[code1] then
-                    current_bg_color = color_codes[code1]
+                elseif globals.color_codes[code1] then
+                    current_bg_color = globals.color_codes[code1]
                 end
                 
                 if code2 == "r" then
                     current_text_color = default_text_color
-                elseif color_codes[code2] then
-                    current_text_color = color_codes[code2]
+                elseif globals.color_codes[code2] then
+                    current_text_color = globals.color_codes[code2]
                 end
                 
                 pos = pos + 4
@@ -244,8 +145,8 @@ local function parse_and_draw_colored_text(text)
                 -- Single code: text color only
                 if code1 == "r" then
                     current_text_color = default_text_color
-                elseif color_codes[code1] then
-                    current_text_color = color_codes[code1]
+                elseif globals.color_codes[code1] then
+                    current_text_color = globals.color_codes[code1]
                 end
                 
                 pos = pos + 2
@@ -288,7 +189,7 @@ end
 
 local function draw_decimal_id(x, y, id)
     for decimal_string in string.format("%04d", id):gmatch "." do
-        for y_offset, line in pairs(decimals[tonumber(decimal_string)]) do
+        for y_offset, line in pairs(globals.decimals[tonumber(decimal_string)]) do
             term.setCursorPos(x, y + y_offset - 1)
             for char in line:gmatch "." do
                 term.setBackgroundColor(char == "#" and colors.green or colors.black)
@@ -467,7 +368,7 @@ local function draw_menu_content()
 
     draw_label(elements.menu_title.x, elements.menu_title.y, "&fWORLD")
 
-    for y_offset, line in pairs(menu_lines) do
+    for y_offset, line in pairs(globals.menu_lines) do
         term.setCursorPos(elements.menu_title.x, elements.menu_title.y + y_offset)
         for char in line:gmatch "." do
             term.setBackgroundColor(char == "#" and (state.on and colors.lime or colors.red) or colors.black)
@@ -534,16 +435,39 @@ local function draw_turtles_view()
     term.redirect(monitor.restore_to)
 end
 
+local function get_state_color(state)
+    -- Returns color based on turtle state
+    if state == "halt" then
+        return globals.color_codes.red
+    elseif state == "idle" then
+        return globals.color_codes.gray
+    elseif state == "lost" then
+        return globals.color_codes.magenta
+    elseif state == "mining" then
+        return globals.color_codes.orange
+    elseif state == "trip" then
+        return globals.color_codes.cyan
+    elseif state == "park" then
+        return globals.color_codes.brown
+    elseif state == "pair" or state == "wait" then
+        return globals.color_codes.lightBlue
+    else
+        return globals.color_codes.lime  -- active/other states
+    end
+end
+
 local function draw_stats_view()
     term.redirect(monitor)
     clear_content_area()
 
     local turtle_count, active_count, mining_count, idle_count, halt_count, lost_count = 0, 0, 0, 0, 0, 0
     local total_fuel, total_items = 0, 0
+    local turtle_list = {}  -- List of turtles for visualization
     
     for _, turtle in pairs(state.turtles) do
         if turtle.data then
             turtle_count = turtle_count + 1
+            table.insert(turtle_list, turtle)
             if turtle.state == "halt" then halt_count = halt_count + 1
             elseif turtle.state == "idle" then idle_count = idle_count + 1
             elseif turtle.state == "lost" then lost_count = lost_count + 1
@@ -593,14 +517,58 @@ local function draw_stats_view()
     draw_label(elements.stats_blocks_mined_avg.x, elements.stats_blocks_mined_avg.y, 
         string.format("&fAvg Depth: &b%d &fblocks", avg_depth))
     
-    draw_label(elements.stats_turtles_title.x, elements.stats_turtles_title.y, "&fTurtles:")
+    draw_label(elements.stats_turtles_title.x, elements.stats_turtles_title.y, "&0&fTurtles: &7%d&f/&f%d", stats_turtle_scroll + 1, #turtle_list)
     
-    draw_label(elements.stats_turtles_total.x, elements.stats_turtles_total.y, 
-        string.format("&e%d &fTotal", turtle_count))
-    
-    draw_label(elements.stats_turtles_active.x, elements.stats_turtles_active.y, 
-        string.format("&a%d &fActive &8- &6%d &fMining &8- &7%d &fIdle &8- &c%d &fHalted &8- &4%d &fLost", 
-            active_count, mining_count, idle_count, halt_count, lost_count))
+    -- Draw turtle visualization
+    if #turtle_list > 0 then
+        local viz_start_x = elements.stats_turtles_viz.x
+        local viz_y = elements.stats_turtles_viz.y
+        local viz_width = monitor_width - viz_start_x - 1  -- Leave space for arrows
+        
+        -- Calculate how many turtles can fit (leave 2 spaces for arrows if scrolling needed)
+        local max_visible = viz_width
+        if #turtle_list > viz_width then
+            max_visible = viz_width - 2  -- Reserve space for left and right arrows
+        end
+        
+        -- Clamp scroll offset
+        local max_scroll = math.max(0, #turtle_list - max_visible)
+        if stats_turtle_scroll > max_scroll then
+            stats_turtle_scroll = max_scroll
+        end
+        if stats_turtle_scroll < 0 then
+            stats_turtle_scroll = 0
+        end
+        
+        -- Draw left arrow if we can scroll left
+        if stats_turtle_scroll > 0 then
+            draw_label(viz_start_x, viz_y, "&2&f<")
+            viz_start_x = viz_start_x + 1
+        end
+        
+        -- Draw turtles
+        local draw_x = viz_start_x
+        for i = stats_turtle_scroll + 1, math.min(stats_turtle_scroll + max_visible, #turtle_list) do
+            local turtle = turtle_list[i]
+            local state_color = get_state_color(turtle.state)
+            
+            -- Check if turtle connection is lost
+            if turtle.last_update + config.turtle_timeout < os.clock() then
+                state_color = colors.red
+            end
+            
+            draw_label(draw_x, viz_y, string.format("&%s ", state_color))
+            draw_x = draw_x + 1
+        end
+        
+        -- Draw right arrow if we can scroll right
+        if stats_turtle_scroll < max_scroll then
+            draw_label(viz_start_x + max_visible, viz_y, "&2&f>")
+        end
+        
+        -- Reset background
+        term.setBackgroundColor(colors.black)
+    end
     
     if total_fuel > 0 or total_items > 0 then
         draw_label(elements.stats_resources_title.x, elements.stats_resources_title.y, "&fResources:")
@@ -861,6 +829,42 @@ local function touch_monitor(touch)
                 end
             end
         end
+    elseif current_tab == "stats" then
+        -- Handle turtle visualization scrolling
+        -- Check if touch is on the turtle visualization row
+        if touch.y == elements.stats_turtles_viz.y then
+            local turtle_list = {}
+            for _, turtle in pairs(state.turtles) do
+                if turtle.data then
+                    table.insert(turtle_list, turtle)
+                end
+            end
+            
+            if #turtle_list > 0 then
+                local viz_start_x = elements.stats_turtles_viz.x
+                local viz_width = monitor_width - viz_start_x - 1
+                local max_visible = viz_width
+                if #turtle_list > viz_width then
+                    max_visible = viz_width - 2
+                end
+                local max_scroll = math.max(0, #turtle_list - max_visible)
+                
+                -- Check if clicking left arrow (only shown if stats_turtle_scroll > 0)
+                if stats_turtle_scroll > 0 and touch.x == viz_start_x then
+                    stats_turtle_scroll = math.max(0, stats_turtle_scroll - 1)
+                    return
+                end
+                
+                -- Check if clicking right arrow
+                -- Calculate position: start + (left arrow if shown) + visible turtles
+                local actual_start = viz_start_x + (stats_turtle_scroll > 0 and 1 or 0)
+                local right_arrow_x = actual_start + max_visible
+                if stats_turtle_scroll < max_scroll and touch.x == right_arrow_x then
+                    stats_turtle_scroll = math.min(max_scroll, stats_turtle_scroll + 1)
+                    return
+                end
+            end
+        end
     elseif current_tab == "map" then
         if touch.x == elements.up.x and touch.y == elements.up.y then
             monitor_location.z = monitor_location.z - zoom_factor
@@ -967,6 +971,7 @@ local function init_elements()
         stats_resources_items = {x = 2, y = 16},
         stats_version_title = {x = 2, y = 18},
         stats_version_status = {x = 7, y = 18},
+        stats_turtles_viz = {x = 2, y = 13},
     }
 end
 

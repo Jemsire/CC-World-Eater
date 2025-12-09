@@ -1,38 +1,3 @@
-inf = basics.inf
-str_xyz = basics.str_xyz
-
-bumps = {
-    north = { 0,  0, -1},
-    south = { 0,  0,  1},
-    east  = { 1,  0,  0},
-    west  = {-1,  0,  0},
-}
-
-
-left_shift = {
-    north = 'west',
-    south = 'east',
-    east  = 'north',
-    west  = 'south',
-}
-
-
-right_shift = {
-    north = 'east',
-    south = 'west',
-    east  = 'south',
-    west  = 'north',
-}
-
-
-reverse_shift = {
-    north = 'south',
-    south = 'north',
-    east  = 'west',
-    west  = 'east',
-}
-
-
 move = {
     forward = turtle.forward,
     up      = turtle.up,
@@ -296,10 +261,10 @@ function go_route(route, xyzo)
     if xyzo then
         xyz_string = str_xyz(xyzo)
     end
-    local location_str = basics.str_xyz(state.location)
+    local location_str = globals.str_xyz(state.location)
     while route[location_str] and location_str ~= xyz_string do
         if not go_to(route[location_str], nil, 'xyz') then return false end
-        location_str = basics.str_xyz(state.location)
+        location_str = globals.str_xyz(state.location)
     end
     if xyzo then
         if location_str ~= xyz_string then
@@ -315,18 +280,18 @@ end
 
 function go_to_home()
     state.updated_not_home = nil
-    if basics.in_area(state.location, config.locations.home_area) then
+    if globals.in_area(state.location, config.locations.home_area) then
         return true
-    elseif basics.in_area(state.location, config.locations.greater_home_area) then
+    elseif globals.in_area(state.location, config.locations.greater_home_area) then
         if not go_to_home_exit() then return false end
-    elseif basics.in_area(state.location, config.locations.waiting_room_area) then
+    elseif globals.in_area(state.location, config.locations.waiting_room_area) then
         if not go_to(config.locations.mine_exit, nil, config.paths.waiting_room_to_mine_exit, true) then return false end
     elseif state.location.y < config.locations.mine_enter.y then
         return false
     end
-    if config.locations.main_loop_route[basics.str_xyz(state.location)] then
+    if config.locations.main_loop_route[globals.str_xyz(state.location)] then
         if not go_route(config.locations.main_loop_route, config.locations.home_enter) then return false end
-    elseif basics.in_area(state.location, config.locations.control_room_area) then
+    elseif globals.in_area(state.location, config.locations.control_room_area) then
         if not go_to(config.locations.home_enter, nil, config.paths.control_room_to_home_enter, true) then return false end
     else
         return false
@@ -343,9 +308,9 @@ end
 
 
 function go_to_home_exit()
-    if basics.in_area(state.location, config.locations.greater_home_area) then
+    if globals.in_area(state.location, config.locations.greater_home_area) then
         if not go_to(config.locations.home_exit, nil, config.paths.home_to_home_exit) then return false end
-    elseif config.locations.main_loop_route[basics.str_xyz(state.location)] then
+    elseif config.locations.main_loop_route[globals.str_xyz(state.location)] then
         if not go_route(config.locations.main_loop_route, config.locations.home_exit) then return false end
     else
         return false
@@ -355,7 +320,7 @@ end
 
 
 function go_to_item_drop()
-    if not config.locations.main_loop_route[basics.str_xyz(state.location)] then
+    if not config.locations.main_loop_route[globals.str_xyz(state.location)] then
         if not go_to_home() then return false end
         if not go_to_home_exit() then return false end
     end
@@ -365,7 +330,7 @@ end
 
 
 function go_to_refuel()
-    if not config.locations.main_loop_route[basics.str_xyz(state.location)] then
+    if not config.locations.main_loop_route[globals.str_xyz(state.location)] then
         if not go_to_home() then return false end
         if not go_to_home_exit() then return false end
     end
@@ -375,7 +340,7 @@ end
 
 
 function go_to_waiting_room()
-    if not basics.in_area(state.location, config.locations.waiting_room_line_area) then
+    if not globals.in_area(state.location, config.locations.waiting_room_line_area) then
         if not go_to_home() then return false end
     end
     if not go_to(config.locations.waiting_room, nil, config.paths.home_to_waiting_room) then return false end
@@ -390,7 +355,7 @@ end
 
 
 function go_to_strip(strip)
-    if state.location.y < config.locations.mine_enter.y or basics.in_location(state.location, config.locations.mine_enter) then
+    if state.location.y < config.locations.mine_enter.y or globals.in_location(state.location, config.locations.mine_enter) then
         if state.type == 'mining' then
             local bump = bumps[strip.orientation]
             strip = {
@@ -527,7 +492,7 @@ function calibrate()
     
     back()
     
-    if basics.in_area(state.location, config.locations.home_area) then
+    if globals.in_area(state.location, config.locations.home_area) then
         face(left_shift[left_shift[config.locations.homes.increment]])
     end
     

@@ -1,5 +1,3 @@
-inf = 1e309
-
 ---==[ MINE ]==---
 
 
@@ -138,7 +136,7 @@ locations = {
      -- THE AREA ENCOMPASSING TURTLE HOMES
      --     where they sleep.
     greater_home_area = {
-        min_x =  -inf,
+        min_x =  -globals.inf,
         max_x = c.x-3,
         min_y = c.y+0,
         max_y = c.y+1,
@@ -160,7 +158,7 @@ locations = {
 
      -- WHERE TURTLES QUEUE TO BE PAIRED UP
     waiting_room_line_area = {
-        min_x =  -inf,
+        min_x =  -globals.inf,
         max_x = c.x-2,
         min_y = c.y+0,
         max_y = c.y+0,
@@ -240,7 +238,7 @@ mining_turtle_locations = {
      -- LINE, AS WELL AS THE PATH TURTLES
      -- TAKE TO GET TO THEIR HOME
     home_area = {
-        min_x = -inf,
+        min_x = -globals.inf,
         max_x = c.x-3,
         min_y = c.y+0,
         max_y = c.y+0,
@@ -281,7 +279,7 @@ chunky_turtle_locations = {
      -- LINE, AS WELL AS THE PATH TURTLES
      -- TAKE TO GET TO THEIR HOME
     home_area = {
-        min_x = -inf,
+        min_x = -globals.inf,
         max_x = c.x-3,
         min_y = c.y+0,
         max_y = c.y+0,

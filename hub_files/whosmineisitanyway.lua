@@ -1,19 +1,6 @@
 -- WILL BE REMOVED AFTER FINISHING 1.0.0
 -- old script from https://github.com/merlinlikethewizard/Mastermine the original author of the old code.
 
-
-inf = basics.inf
-str_xyz = basics.str_xyz
-
-
-reverse_shift = {
-    north = 'south',
-    south = 'north',
-    east  = 'west',
-    west  = 'east',
-}
-
-
 function load_mine()
     -- LOAD MINE INTO state.mine FROM /mine/<x,z>/ DIRECTORY
     state.mine_dir_path = '/mine/' .. config.locations.mine_enter.x .. ',' .. config.locations.mine_enter.z .. '/'
@@ -205,7 +192,7 @@ function gen_next_strip()
     local level = get_mining_level()
     state.next_strip = get_closest_free_strip(level)
     if state.next_strip then
-        state.min_fuel = (basics.distance(state.next_strip, config.locations.mine_enter) + config.mission_length) * 3
+        state.min_fuel = (globals.distance(state.next_strip, config.locations.mine_enter) + config.mission_length) * 3
     else
         state.min_fuel = nil
     end
@@ -222,7 +209,7 @@ function get_closest_free_strip(level)
     local closest_strip
     local distance
     local z_distance
-    local min_dist = inf
+    local min_dist = globals.inf
     
     while west_x >= min_x and east_x <= max_x and offset_x < min_dist do
         for _, x in pairs({west_x, east_x}) do
@@ -271,7 +258,7 @@ end
 
 
 function good_on_fuel(mining_turtle, chunky_turtle)
-    local fuel_needed = math.ceil(basics.distance(mining_turtle.data.location, config.locations.mine_exit) * 1.5)
+    local fuel_needed = math.ceil(globals.distance(mining_turtle.data.location, config.locations.mine_exit) * 1.5)
     return (mining_turtle.data.fuel_level == "unlimited" or mining_turtle.data.fuel_level > fuel_needed) and ((not config.use_chunky_turtles) or (chunky_turtle.data.fuel_level == "unlimited" or chunky_turtle.data.fuel_level > fuel_needed))
 end
 
@@ -751,7 +738,7 @@ function command_turtles()
                     free_turtle(turtle)
                     if turtle.data.location.y < config.locations.mine_enter.y then
                         send_turtle_up(turtle)
-                    elseif not basics.in_area(turtle.data.location, config.locations.control_room_area) then
+                    elseif not globals.in_area(turtle.data.location, config.locations.control_room_area) then
                         halt(turtle)
                     elseif turtle.data.item_count > 0 or (turtle.data.fuel_level ~= "unlimited" and turtle.data.fuel_level < config.fuel_per_unit) then
                         add_task(turtle, {action = 'prepare', data = {config.fuel_per_unit}})

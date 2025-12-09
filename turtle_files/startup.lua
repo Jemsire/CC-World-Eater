@@ -6,13 +6,15 @@ if fs.exists('/apis') then
     fs.delete('/apis')
 end
 fs.makeDir('/apis')
+fs.copy('/globals.lua', '/apis/globals')
+fs.copy('/lua_utils.lua', '/apis/lua_utils')
 fs.copy('/config.lua', '/apis/config')
 fs.copy('/state.lua', '/apis/state')
-fs.copy('/basics.lua', '/apis/basics')
 fs.copy('/actions.lua', '/apis/actions')
+os.loadAPI('/apis/globals')
+os.loadAPI('/apis/lua_utils')
 os.loadAPI('/apis/config')
 os.loadAPI('/apis/state')
-os.loadAPI('/apis/basics')
 os.loadAPI('/apis/actions')
 
 
