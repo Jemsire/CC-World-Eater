@@ -52,36 +52,49 @@ getblock = {
     forward = function(pos, fac)
         if not pos then pos = state.location end
         if not fac then fac = state.orientation end
-        local bump = bumps[fac]
+        local bump = globals.bumps[fac]
         return {x = pos.x + bump[1], y = pos.y + bump[2], z = pos.z + bump[3]}
     end,
     
     back = function(pos, fac)
         if not pos then pos = state.location end
         if not fac then fac = state.orientation end
-        local bump = bumps[fac]
+        local bump = globals.bumps[fac]
         return {x = pos.x - bump[1], y = pos.y - bump[2], z = pos.z - bump[3]}
     end,
     
     left = function(pos, fac)
         if not pos then pos = state.location end
         if not fac then fac = state.orientation end
-        local bump = bumps[left_shift[fac]]
+        local bump = globals.bumps[globals.left_shift[fac]]
         return {x = pos.x + bump[1], y = pos.y + bump[2], z = pos.z + bump[3]}
     end,
     
     right = function(pos, fac)
         if not pos then pos = state.location end
         if not fac then fac = state.orientation end
-        local bump = bumps[right_shift[fac]]
+        local bump = globals.bumps[globals.right_shift[fac]]
         return {x = pos.x + bump[1], y = pos.y + bump[2], z = pos.z + bump[3]}
     end,
 }
 
 
 function digblock(direction)
-    dig[direction]()
-    return true
+    -- Check if block exists before digging
+    local block_data = {inspect[direction]()}
+    local block_name = block_data[2] and block_data[2].name
+    
+    local success = dig[direction]()
+    
+    -- Track blocks mined (only count non-air blocks that were successfully dug)
+    if success and block_name and block_name ~= "minecraft:air" then
+        if not state.blocks_mined then
+            state.blocks_mined = 0
+        end
+        state.blocks_mined = state.blocks_mined + 1
+    end
+    
+    return success
 end
 
 
@@ -144,11 +157,11 @@ end
 function face(orientation)
     if state.orientation == orientation then
         return true
-    elseif right_shift[state.orientation] == orientation then
+    elseif globals.right_shift[state.orientation] == orientation then
         if not go('right') then return false end
-    elseif left_shift[state.orientation] == orientation then
+    elseif globals.left_shift[state.orientation] == orientation then
         if not go('left') then return false end
-    elseif right_shift[right_shift[state.orientation]] == orientation then
+    elseif globals.right_shift[globals.right_shift[state.orientation]] == orientation then
         if not go('right') then return false end
         if not go('right') then return false end
     else
@@ -164,15 +177,15 @@ function log_movement(direction)
     elseif direction == 'down' then
         state.location.y = state.location.y -1
     elseif direction == 'forward' then
-        bump = bumps[state.orientation]
+        bump = globals.bumps[state.orientation]
         state.location = {x = state.location.x + bump[1], y = state.location.y + bump[2], z = state.location.z + bump[3]}
     elseif direction == 'back' then
-        bump = bumps[state.orientation]
+        bump = globals.bumps[state.orientation]
         state.location = {x = state.location.x - bump[1], y = state.location.y - bump[2], z = state.location.z - bump[3]}
     elseif direction == 'left' then
-        state.orientation = left_shift[state.orientation]
+        state.orientation = globals.left_shift[state.orientation]
     elseif direction == 'right' then
-        state.orientation = right_shift[state.orientation]
+        state.orientation = globals.right_shift[state.orientation]
     end
     return true
 end
@@ -259,7 +272,7 @@ end
 function go_route(route, xyzo)
     local xyz_string
     if xyzo then
-        xyz_string = str_xyz(xyzo)
+        xyz_string = globals.str_xyz(xyzo)
     end
     local location_str = globals.str_xyz(state.location)
     while route[location_str] and location_str ~= xyz_string do
@@ -357,7 +370,7 @@ end
 function go_to_strip(strip)
     if state.location.y < config.locations.mine_enter.y or globals.in_location(state.location, config.locations.mine_enter) then
         if state.type == 'mining' then
-            local bump = bumps[strip.orientation]
+            local bump = globals.bumps[strip.orientation]
             strip = {
                 x = strip.x + bump[1],
                 y = strip.y + bump[2],
@@ -408,7 +421,18 @@ function safedig(direction)
             end
         end
 
-        return dig[direction]()
+        -- Dig the block
+        local success = dig[direction]()
+        
+        -- Track blocks mined (only count non-air blocks that were successfully dug)
+        if success and block_name and block_name ~= "minecraft:air" then
+            if not state.blocks_mined then
+                state.blocks_mined = 0
+            end
+            state.blocks_mined = state.blocks_mined + 1
+        end
+        
+        return success
     end
     return true
 end
@@ -488,12 +512,12 @@ function calibrate()
         return false
     end
     state.location = {x = nx, y = ny, z = nz}
-    print('Calibrated to ' .. str_xyz(state.location, state.orientation))
+    print('Calibrated to ' .. globals.str_xyz(state.location, state.orientation))
     
     back()
     
     if globals.in_area(state.location, config.locations.home_area) then
-        face(left_shift[left_shift[config.locations.homes.increment]])
+        face(globals.left_shift[globals.left_shift[config.locations.homes.increment]])
     end
     
     return true
@@ -532,6 +556,12 @@ function initialize(session_id, config_values)
     
     state.request_id = 1
     state.initialized = true
+    
+    -- Initialize blocks_mined counter if not already set
+    if not state.blocks_mined then
+        state.blocks_mined = 0
+    end
+    
     return true
 end
 
@@ -573,22 +603,22 @@ function fastest_route(area, pos, fac, end_locations)
             path = '',
         }
     )
-    explored[str_xyz(pos, fac)] = true
+    explored[globals.str_xyz(pos, fac)] = true
 
     while #queue > 0 do
         local node = table.remove(queue, 1)
-        if end_locations[str_xyz(node.coords)] or end_locations[str_xyz(node.coords, node.facing)] then
+        if end_locations[globals.str_xyz(node.coords)] or end_locations[globals.str_xyz(node.coords, node.facing)] then
             return node.path
         end
         for _, step in pairs({
-                {coords = node.coords,                                facing = left_shift[node.facing],  path = node.path .. 'l'},
-                {coords = node.coords,                                facing = right_shift[node.facing], path = node.path .. 'r'},
+                {coords = node.coords,                                facing = globals.left_shift[node.facing],  path = node.path .. 'l'},
+                {coords = node.coords,                                facing = globals.right_shift[node.facing], path = node.path .. 'r'},
                 {coords = getblock.forward(node.coords, node.facing), facing = node.facing,              path = node.path .. 'f'},
                 {coords = getblock.up(node.coords, node.facing),      facing = node.facing,              path = node.path .. 'u'},
                 {coords = getblock.down(node.coords, node.facing),    facing = node.facing,              path = node.path .. 'd'},
                 }) do
-            explore_string = str_xyz(step.coords, step.facing)
-            if not explored[explore_string] and (not area or area[str_xyz(step.coords)]) then
+            explore_string = globals.str_xyz(step.coords, step.facing)
+            if not explored[explore_string] and (not area or area[globals.str_xyz(step.coords)]) then
                 explored[explore_string] = true
                 table.insert(queue, step)
             end

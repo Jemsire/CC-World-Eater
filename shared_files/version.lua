@@ -6,8 +6,8 @@
 -- Note: dev_suffix is for display only. All comparisons use dev=true/false
 return {
     major = 0,
-    minor = 3,
-    hotfix = 4,
+    minor = 4,
+    hotfix = 0,
     dev_suffix = "-DEV",
     dev = false
 }

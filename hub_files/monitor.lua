@@ -19,27 +19,13 @@ local turtles = {}
 -- ============================================================================
 
 local function format_version(version)
-    if not version or type(version) ~= "table" then
-        return "unknown"
-    end
-    local version_str = string.format("%d.%d.%d", version.major or 0, version.minor or 0, version.hotfix or 0)
-    if version.dev == true then
-        version_str = version_str .. "-DEV"
-    end
-    return version_str
+    -- Wrapper around lua_utils.format_version that returns "unknown" instead of nil
+    return lua_utils.format_version(version) or "unknown"
 end
 
 local function get_hub_version()
-    if fs.exists("/version.lua") then
-        local version_func = loadfile("/version.lua")
-        if version_func then
-            local success, version = pcall(version_func)
-            if success and version and type(version) == "table" then
-                return version
-            end
-        end
-    end
-    return nil
+    -- Use lua_utils.load_file to load version.lua
+    return lua_utils.load_file("/version.lua")
 end
 
 local function is_hub_up_to_date()
@@ -175,10 +161,10 @@ local function draw_version_status(x, y, version, is_up_to_date)
     
     if is_up_to_date == true then
         status_text = "&2&fUP"
-        version_text = "&0&2 v" .. (version and format_version(version) or "unknown")
+        version_text = "&0&2 v" .. format_version(version)
     elseif is_up_to_date == false then
         status_text = "&4&fOUT"
-        version_text = "&0&c v" .. (version and format_version(version) or "unknown")
+        version_text = "&0&c v" .. format_version(version)
     else
         status_text = "&8&fUNK"
         version_text = "&0&8 " .. (version and "v" .. format_version(version) or "unknown")
@@ -438,21 +424,21 @@ end
 local function get_state_color(state)
     -- Returns color based on turtle state
     if state == "halt" then
-        return globals.color_codes.red
+        return '4'
     elseif state == "idle" then
-        return globals.color_codes.gray
+        return '8'
     elseif state == "lost" then
-        return globals.color_codes.magenta
+        return '5'
     elseif state == "mining" then
-        return globals.color_codes.orange
+        return '6'
     elseif state == "trip" then
-        return globals.color_codes.cyan
+        return '3'
     elseif state == "park" then
-        return globals.color_codes.brown
+        return '7'
     elseif state == "pair" or state == "wait" then
-        return globals.color_codes.lightBlue
+        return '9'
     else
-        return globals.color_codes.lime  -- active/other states
+        return '2'  -- active/other states
     end
 end
 
@@ -480,28 +466,48 @@ local function draw_stats_view()
         end
     end
     
-    local columns_mined, total_blocks_mined = 0, 0
+    local columns_mined = 0
     local start_y = config.locations.mine_enter.y - 2
     
+    -- Count columns
     if state.mine and state.mine.columns then
         for _, column in pairs(state.mine.columns) do
             if column and column.current_y then
                 columns_mined = columns_mined + 1
-                total_blocks_mined = total_blocks_mined + math.max(0, start_y - column.current_y)
+            end
+        end
+    end
+    
+    -- Use saved total_blocks_mined if available, otherwise calculate it
+    local total_blocks_mined = 0
+    if state.mine and state.mine.total_blocks_mined then
+        total_blocks_mined = state.mine.total_blocks_mined
+    else
+        -- Fallback: calculate if not saved
+        if state.mine and state.mine.columns then
+            for _, column in pairs(state.mine.columns) do
+                if column and column.current_y then
+                    total_blocks_mined = total_blocks_mined + math.max(0, start_y - column.current_y)
+                end
             end
         end
     end
     
     local total_area, area_progress = nil, nil
+    local area_label = "infxinf"
     if config.mining_radius then
-        total_area = math.floor(math.pi * config.mining_radius * config.mining_radius)
+        -- Calculate square area: radius blocks in each direction from center = (radius * 2 + 1)^2
+        total_diameter = config.mining_radius * 2 + 1
+        total_area = total_diameter * total_diameter
         area_progress = total_area > 0 and (columns_mined / total_area * 100) or 0
+        -- Label shows diameter (radius * 2) x (radius * 2)
+        area_label = string.format("%dx%d", total_diameter, total_diameter)
     end
     local avg_depth = columns_mined > 0 and math.floor(total_blocks_mined / columns_mined) or 0
     local progress_pct = math.min(100, math.max(0, area_progress or 0))
 
     draw_label(elements.stats_progress_title.x, elements.stats_progress_title.y, 
-        string.format("&0&fProgress: &a%.1f%% &8| &a%d&f/&7%d &8| &f%dr", progress_pct, columns_mined, total_area or 0, config.mining_radius or 0))
+        string.format("&0&fProgress: &a%.1f%% &8| &a%d&f/&7%d &8| &f%s", progress_pct, columns_mined, total_area or 0, area_label))
 
     term.setCursorPos(elements.stats_progress_bar.x, elements.stats_progress_bar.y)
     local bar_width = monitor_width - 2
@@ -512,12 +518,9 @@ local function draw_stats_view()
     term.write(string.rep(" ", bar_width - filled))
     
     draw_label(elements.stats_blocks_mined_title.x, elements.stats_blocks_mined_title.y, 
-        string.format("&fBlocks Mined: &e%d", total_blocks_mined))
+        string.format("&0&fBlocks Mined: &e%d", total_blocks_mined))
     
-    draw_label(elements.stats_blocks_mined_avg.x, elements.stats_blocks_mined_avg.y, 
-        string.format("&fAvg Depth: &b%d &fblocks", avg_depth))
-    
-    draw_label(elements.stats_turtles_title.x, elements.stats_turtles_title.y, "&0&fTurtles: &7%d&f/&f%d", stats_turtle_scroll + 1, #turtle_list)
+    draw_label(elements.stats_turtles_title.x, elements.stats_turtles_title.y, string.format("&0&fTurtles: &7%d&f/&f%d", stats_turtle_scroll + 1, #turtle_list))
     
     -- Draw turtle visualization
     if #turtle_list > 0 then
@@ -528,7 +531,7 @@ local function draw_stats_view()
         -- Calculate how many turtles can fit (leave 2 spaces for arrows if scrolling needed)
         local max_visible = viz_width
         if #turtle_list > viz_width then
-            max_visible = viz_width - 2  -- Reserve space for left and right arrows
+            max_visible = (viz_width - 2) - (#turtle_list - 1)  -- Reserve space for left and right arrows and spaces between turtles
         end
         
         -- Clamp scroll offset
@@ -554,36 +557,29 @@ local function draw_stats_view()
             
             -- Check if turtle connection is lost
             if turtle.last_update + config.turtle_timeout < os.clock() then
-                state_color = colors.red
+                state_color = '4'
             end
             
-            draw_label(draw_x, viz_y, string.format("&%s ", state_color))
-            draw_x = draw_x + 1
+            draw_label(draw_x, viz_y, string.format("&%s&f ", state_color))
+            draw_x = draw_x + 2
         end
         
         -- Draw right arrow if we can scroll right
         if stats_turtle_scroll < max_scroll then
             draw_label(viz_start_x + max_visible, viz_y, "&2&f>")
         end
-        
-        -- Reset background
-        term.setBackgroundColor(colors.black)
     end
     
     if total_fuel > 0 or total_items > 0 then
-        draw_label(elements.stats_resources_title.x, elements.stats_resources_title.y, "&fResources:")
         if total_fuel > 0 then
             draw_label(elements.stats_resources_fuel.x, elements.stats_resources_fuel.y, 
-                "&6Total Fuel: &f" .. total_fuel)
+                "&0&fTotal Fuel: &6" .. total_fuel)
         end
         if total_items > 0 then
             draw_label(elements.stats_resources_items.x, elements.stats_resources_items.y, 
-                "&bTotal Items: &f" .. total_items)
+                "&0&fTotal Items: &b" .. total_items)
         end
     end
-    
-    draw_label(elements.stats_version_title.x, elements.stats_version_title.y, "&fHub: ")
-    draw_version_status(elements.stats_version_status.x, elements.stats_version_status.y, get_hub_version(), is_hub_up_to_date())
 
     term.redirect(monitor.restore_to)
 end
@@ -913,6 +909,7 @@ end
 
 local function init_elements()
     elements = {
+        --Map
         up = {x = math.ceil(monitor_width / 2), y = 2},
         down = {x = math.ceil(monitor_width / 2), y = monitor_height},
         left = {x = 1, y = math.ceil(monitor_height / 2)},
@@ -925,6 +922,7 @@ local function init_elements()
         center_indicator = {x = 2, y = 4},
         x_indicator = {x = 1, y = 2},
         z_indicator = {x = 1, y = 3},
+        --Turtles
         turtle_face = {x = 5, y = 2},
         turtle_id = {x = 16, y = 2},
         turtle_version = {x = 4, y = 7},
@@ -946,6 +944,7 @@ local function init_elements()
         turtle_dig_up = {x = 31, y = 16},
         turtle_dig = {x = 31, y = 17},
         turtle_dig_down = {x = 31, y = 18},
+        --Menu
         menu_title = {x = 6, y = 4},
         menu_version = {x = 6, y = 10},
         menu_suffix = {x = 31, y = 10},
@@ -959,19 +958,14 @@ local function init_elements()
         menu_halt = {x = 33, y = 16},
         menu_clear = {x = 33, y = 17},
         menu_reset = {x = 33, y = 18},
+        --Stats
         stats_progress_title = {x = 2, y = 3},
         stats_progress_bar = {x = 2, y = 4},
-        stats_blocks_mined_title = {x = 2, y = 6},
-        stats_blocks_mined_avg = {x = 2, y = 8},
-        stats_turtles_title = {x = 2, y = 10},
-        stats_turtles_total = {x = 2, y = 11},
-        stats_turtles_active = {x = 2, y = 12},
-        stats_resources_title = {x = 2, y = 14},
-        stats_resources_fuel = {x = 2, y = 15},
-        stats_resources_items = {x = 2, y = 16},
-        stats_version_title = {x = 2, y = 18},
-        stats_version_status = {x = 7, y = 18},
-        stats_turtles_viz = {x = 2, y = 13},
+        stats_blocks_mined_title = {x = 2, y = 5},
+        stats_turtles_title = {x = 2, y = 7},
+        stats_turtles_viz = {x = 2, y = 8},
+        stats_resources_fuel = {x = 2, y = 9},
+        stats_resources_items = {x = 2, y = 10},
     }
 end
 

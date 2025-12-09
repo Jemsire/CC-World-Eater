@@ -42,6 +42,7 @@ while true do
             success          = state.success,
             busy             = state.busy,
             version          = turtle_version,
+            blocks_mined     = state.blocks_mined or 0,
         }, 'turtle_report')
     
     sleep(1)

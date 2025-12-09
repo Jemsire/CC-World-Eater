@@ -24,9 +24,9 @@ use_chunky_turtles = true
 
 -- MINING RADIUS (Primary way to limit mining area - RECOMMENDED)
 --     Creates a circular mining area centered on mining_center
---     Radius is in blocks from mining_center (diameter = radius * 2)
+--     Radius is in blocks from mining_center (diameter = radius * 2 + 1 for the center block of the mining area)
 --     Set to nil for unlimited mining
---     Example: mining_radius = 50  -- Mines 50 blocks radius (100 block diameter total)
+--     Example: mining_radius = 50  -- Mines 50 blocks radius (101 block diameter total)
 mining_radius = 50  -- Set to number (in blocks) to limit mining to radius
 
 

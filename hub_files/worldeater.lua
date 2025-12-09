@@ -33,29 +33,67 @@ function load_mine()
         -- Load each column file
         for _, file_name in pairs(fs.list(columns_dir_path)) do
             if file_name:sub(1, 1) ~= '.' then
-                local file = fs.open(columns_dir_path .. file_name, 'r')
-                if file then
-                    -- file_name is "x,z"
-                    -- file contains current depth (y coordinate)
-                    local current_y = tonumber(file.readAll())
-                    file.close()
-
-                    -- Parse x and z from filename
-                    local coords = string.gmatch(file_name, '[^,]+')
-                    local x = tonumber(coords())
-                    local z = tonumber(coords())
-
-                    -- Create column entry
+                -- Parse x and z from filename (file_name is "x,z")
+                local coords = string.gmatch(file_name, '[^,]+')
+                local x = tonumber(coords())
+                local z = tonumber(coords())
+                
+                -- Try to load as structured data (new format)
+                local column_data = lua_utils.load_file(columns_dir_path .. file_name)
+                
+                if column_data then
+                    -- New format: structured data
                     state.mine.columns[file_name] = {
                         x = x,
                         z = z,
-                        current_y = current_y,
+                        current_y = column_data.current_y,
+                        complete = column_data.complete or false,
+                        disallow_found = column_data.disallow_found or false,
                         key = file_name,
                         turtle = nil  -- Will be assigned when turtle is mining this column
                     }
+                else
+                    -- Backward compatibility: old format (just a number)
+                    local file = fs.open(columns_dir_path .. file_name, 'r')
+                    if file then
+                        local content = file.readAll()
+                        file.close()
+                        local current_y = tonumber(content)
+                        
+                        if current_y then
+                            -- Migrate old format to new format
+                            state.mine.columns[file_name] = {
+                                x = x,
+                                z = z,
+                                current_y = current_y,
+                                complete = false,
+                                disallow_found = false,
+                                key = file_name,
+                                turtle = nil
+                            }
+                            -- Save in new format
+                            write_column(state.mine.columns[file_name])
+                        end
+                    end
                 end
             end
         end
+    end
+
+    -- Load or calculate total blocks mined (persisted across restarts)
+    local total_blocks_file = state.mine_dir_path .. 'total_blocks_mined'
+    if fs.exists(total_blocks_file) then
+        local file = fs.open(total_blocks_file, 'r')
+        if file then
+            state.mine.total_blocks_mined = tonumber(file.readAll()) or 0
+            file.close()
+        end
+    end
+    
+    -- If not loaded, calculate from columns (first run or migration)
+    if not state.mine.total_blocks_mined then
+        state.mine.total_blocks_mined = calculate_total_blocks_mined()
+        save_total_blocks_mined()
     end
 
     -- Setup turtles directory
@@ -93,18 +131,13 @@ function load_mine()
             end
             
             -- Load persisted version if available
-            if fs.exists(turtle_dir_path .. 'version.lua') then
-                local version_func = loadfile(turtle_dir_path .. 'version.lua')
-                if version_func then
-                    local success, version = pcall(version_func)
-                    if success and version and type(version) == "table" then
-                        -- Initialize data if not present
-                        if not turtle.data then
-                            turtle.data = {}
-                        end
-                        turtle.data.version = version
-                    end
+            local version = lua_utils.load_file(turtle_dir_path .. 'version.lua')
+            if version then
+                -- Initialize data if not present
+                if not turtle.data then
+                    turtle.data = {}
                 end
+                turtle.data.version = version
             end
         end
     end
@@ -118,9 +151,23 @@ end
 function write_column(column)
     -- SAVE COLUMN STATE TO DISK
     -- Format: /mine/<x,z>/columns/<x,z>
+    -- TODO: Column data structure saved here:
+    --   - complete: boolean (true when column reached bedrock)
+    --   - disallow_found: boolean (true if disallowed block was found and mined around)
+    --   - current_y: number (current Y coordinate being mined)
     local columns_dir_path = state.mine_dir_path .. 'columns/'
+    
+    -- Prepare column data to save (only save relevant fields, not runtime data like turtle reference)
+    local column_data = {
+        complete = column.complete or false,
+        disallow_found = column.disallow_found or false,
+        current_y = column.current_y
+    }
+    
+    -- Serialize and save as Lua table
+    local serialized = lua_utils.serialize_table(column_data)
     local file = fs.open(columns_dir_path .. column.key, 'w')
-    file.write(column.current_y)
+    file.write("return " .. serialized)
     file.close()
 end
 
@@ -130,6 +177,44 @@ function write_turtle_column(turtle, column)
     local file = fs.open(state.turtles_dir_path .. turtle.id .. '/column', 'w')
     file.write(column.key)
     file.close()
+end
+
+
+function save_total_blocks_mined()
+    -- SAVE TOTAL BLOCKS MINED TO DISK (persists across restarts)
+    -- TODO: Total blocks mined is now tracked incrementally
+    --   - Each time a turtle mines a non-air block, it increments its counter
+    --   - When turtle reports, hub calculates delta and adds to total
+    --   - Saved to /mine/<x,z>/total_blocks_mined
+    --   - Updated in real-time as turtles mine blocks
+    if not state.mine then
+        return
+    end
+    
+    local total_blocks_file = state.mine_dir_path .. 'total_blocks_mined'
+    local file = fs.open(total_blocks_file, 'w')
+    if file then
+        file.write(tostring(state.mine.total_blocks_mined or 0))
+        file.close()
+    end
+end
+
+
+function calculate_total_blocks_mined()
+    -- CALCULATE TOTAL BLOCKS MINED FROM ALL COLUMNS
+    -- This is the sum of depth mined for each column
+    local start_y = config.locations.mine_enter.y - 2
+    local total = 0
+    
+    if state.mine and state.mine.columns then
+        for _, column in pairs(state.mine.columns) do
+            if column and column.current_y then
+                total = total + math.max(0, start_y - column.current_y)
+            end
+        end
+    end
+    
+    return total
 end
 
 
@@ -144,6 +229,8 @@ function create_column(x, z)
         x = x,
         z = z,
         current_y = start_y,
+        complete = false,
+        disallow_found = false,
         key = key,
         turtle = nil
     }
@@ -297,6 +384,8 @@ end
 
 function update_column_progress(turtle)
     -- UPDATE COLUMN DEPTH BASED ON TURTLE'S CURRENT POSITION
+    -- Note: Total blocks mined is now tracked incrementally when turtles report blocks mined,
+    -- not calculated from column depth
     if turtle.column and turtle.data and turtle.data.location then
         local current_y = turtle.data.location.y
         if current_y < turtle.column.current_y then
@@ -358,6 +447,8 @@ function continue_mining(turtle)
     -- Check if we've reached bedrock (y <= 0) or hit disallowed block
     if turtle.column.current_y <= 0 then
         print('Turtle ' .. turtle.id .. ' completed column (' .. turtle.column.x .. ',' .. turtle.column.z .. ')')
+        turtle.column.complete = true
+        write_column(turtle.column)
         free_turtle(turtle)
         add_task(turtle, {action = 'pass', end_state = 'idle'})
         return
@@ -512,16 +603,7 @@ function user_input()
 
         elseif command == 'update' then
             -- Get hub version for comparison
-            local hub_version = nil
-            if fs.exists("/version.lua") then
-                local version_func = loadfile("/version.lua")
-                if version_func then
-                    local success, version = pcall(version_func)
-                    if success and version and type(version) == "table" then
-                        hub_version = version
-                    end
-                end
-            end
+            local hub_version = lua_utils.load_file("/version.lua")
             
             for _, turtle in pairs(turtles) do
                 -- Check if turtle version matches hub version before updating
@@ -534,8 +616,8 @@ function user_input()
                     
                     if comparison == 0 then
                         -- Versions match - turtle is up to date
-                        local turtle_str = string.format("%d.%d.%d", turtle_version.major or 0, turtle_version.minor or 0, turtle_version.hotfix or 0)
-                        local hub_str = string.format("%d.%d.%d", hub_version.major or 0, hub_version.minor or 0, hub_version.hotfix or 0)
+                        local turtle_str = lua_utils.format_version(turtle_version) or "unknown"
+                        local hub_str = lua_utils.format_version(hub_version) or "unknown"
                         print('[Update] Turtle ' .. turtle.id .. ' is already up to date (turtle: ' .. turtle_str .. ', hub: ' .. hub_str .. '). Skipping update.')
                         needs_update = false
                     end

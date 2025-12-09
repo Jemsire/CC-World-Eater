@@ -12,8 +12,39 @@ while true do
             if not state.turtles[sender] then
                 state.turtles[sender] = {id = sender}
             end
+            
+            -- Track blocks mined increment
+            local old_blocks_mined = state.turtles[sender].data and state.turtles[sender].data.blocks_mined or 0
+            local new_blocks_mined = message.blocks_mined or 0
+            local blocks_delta = new_blocks_mined - old_blocks_mined
+            
             state.turtles[sender].data = message
             state.turtles[sender].last_update = os.clock()
+            
+            -- Update total blocks mined if turtle reported new blocks
+            -- Only process if mine is initialized and delta is positive (ignore negative deltas from turtle restarts)
+            if blocks_delta > 0 and state.mine then
+                -- Ensure mine_dir_path is available (may not be set if load_mine hasn't run yet)
+                local mine_dir_path = state.mine_dir_path
+                if not mine_dir_path and config and config.locations and config.locations.mine_enter then
+                    mine_dir_path = '/mine/' .. config.locations.mine_enter.x .. ',' .. config.locations.mine_enter.z .. '/'
+                end
+                
+                if mine_dir_path then
+                    if not state.mine.total_blocks_mined then
+                        state.mine.total_blocks_mined = 0
+                    end
+                    state.mine.total_blocks_mined = state.mine.total_blocks_mined + blocks_delta
+                    
+                    -- Save to disk
+                    local total_blocks_file = mine_dir_path .. 'total_blocks_mined'
+                    local file = fs.open(total_blocks_file, 'w')
+                    if file then
+                        file.write(tostring(state.mine.total_blocks_mined))
+                        file.close()
+                    end
+                end
+            end
             
             -- Persist version to disk if present
             if message.version then
@@ -65,15 +96,7 @@ while true do
                 
                 -- Get hub version
                 local hub_version = nil
-                if fs.exists("/version.lua") then
-                    local version_func = loadfile("/version.lua")
-                    if version_func then
-                        local success, version = pcall(version_func)
-                        if success and version and type(version) == "table" then
-                            hub_version = version
-                        end
-                    end
-                end
+                hub_version = lua_utils.load_file("/version.lua")
                 
                 -- Check if versions match (only update if different)
                 -- Note: compare_versions only checks dev=true/false, not dev_suffix (which is for display only)
@@ -83,8 +106,8 @@ while true do
                     
                     if comparison == 0 then
                         -- Versions match - turtle is up to date
-                        local turtle_str = string.format("%d.%d.%d", turtle_version.major or 0, turtle_version.minor or 0, turtle_version.hotfix or 0)
-                        local hub_str = string.format("%d.%d.%d", hub_version.major or 0, hub_version.minor or 0, hub_version.hotfix or 0)
+                        local turtle_str = lua_utils.format_version(turtle_version) or "unknown"
+                        local hub_str = lua_utils.format_version(hub_version) or "unknown"
                         print('[Update] Turtle ' .. sender .. ' is already up to date (turtle: ' .. turtle_str .. ', hub: ' .. hub_str .. '). Skipping update.')
                         rednet.send(sender, {error = 'Already up to date'}, 'update_error')
                         return

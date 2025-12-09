@@ -102,18 +102,13 @@ function load_mine()
             end
             
             -- Load persisted version if available
-            if fs.exists(turtle_dir_path .. 'version.lua') then
-                local version_func = loadfile(turtle_dir_path .. 'version.lua')
-                if version_func then
-                    local success, version = pcall(version_func)
-                    if success and version and type(version) == "table" then
-                        -- Initialize data if not present
-                        if not turtle.data then
-                            turtle.data = {}
-                        end
-                        turtle.data.version = version
-                    end
+            local version = lua_utils.load_file(turtle_dir_path .. 'version.lua')
+            if version then
+                -- Initialize data if not present
+                if not turtle.data then
+                    turtle.data = {}
                 end
+                turtle.data.version = version
             end
         end
     end
@@ -579,16 +574,7 @@ function user_input(input)
         elseif command == 'update' then
             -- FEED TURTLE DINNER
             -- Get hub version for comparison
-            local hub_version = nil
-            if fs.exists("/version.lua") then
-                local version_func = loadfile("/version.lua")
-                if version_func then
-                    local success, version = pcall(version_func)
-                    if success and version and type(version) == "table" then
-                        hub_version = version
-                    end
-                end
-            end
+            local hub_version = lua_utils.load_file("/version.lua")
             
             for _, turtle in pairs(turtles) do
                 -- Check if turtle version matches hub version before updating
@@ -601,8 +587,8 @@ function user_input(input)
                     
                     if comparison == 0 then
                         -- Versions match - turtle is up to date
-                        local turtle_str = string.format("%d.%d.%d", turtle_version.major or 0, turtle_version.minor or 0, turtle_version.hotfix or 0)
-                        local hub_str = string.format("%d.%d.%d", hub_version.major or 0, hub_version.minor or 0, hub_version.hotfix or 0)
+                        local turtle_str = lua_utils.format_version(turtle_version) or "unknown"
+                        local hub_str = lua_utils.format_version(hub_version) or "unknown"
                         print('[Update] Turtle ' .. turtle.id .. ' is already up to date (turtle: ' .. turtle_str .. ', hub: ' .. hub_str .. '). Skipping update.')
                         needs_update = false
                     end
