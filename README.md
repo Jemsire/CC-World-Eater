@@ -175,6 +175,9 @@ Configure in `dig_disallow` table in `hub_files/config.lua`.
 ![Turtle View](assets/images/turtle-screen.png)
 ```View each turtle individually for debugging or controlling manually.```
 
+![Stats View](assets/images/stats-screen.png)
+```View statistics for the mine and live turtle statuses.```
+
 ![Auto Updater](assets/images/auto-update.png)
 ```Auto updater that grabs from github for latest updates easily!```
 
