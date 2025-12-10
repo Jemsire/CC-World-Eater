@@ -89,8 +89,21 @@ while true do
             
         elseif protocol == 'update_request' then
             -- Handle update requests with file streaming to avoid 64KB rednet limit
-            if fs.isDir(message) then
-                -- Check if turtle version matches hub version before updating
+            -- Message can be either a string (old format) or a table with path and force flag (new format)
+            local update_path = nil
+            local force_update = false
+            
+            if type(message) == "string" then
+                -- Old format: just a path string
+                update_path = message
+            elseif type(message) == "table" then
+                -- New format: table with path and force flag
+                update_path = message.path
+                force_update = message.force or false
+            end
+            
+            if update_path and fs.isDir(update_path) then
+                -- Check if turtle version matches hub version before updating (unless force is enabled)
                 local turtle = state.turtles[sender]
                 local turtle_version = turtle and turtle.data and turtle.data.version
                 
@@ -98,10 +111,12 @@ while true do
                 local hub_version = nil
                 hub_version = lua_utils.load_file("/version.lua")
                 
-                -- Check if versions match (only update if different)
+                -- Check if versions match (only update if different, unless force is used)
                 -- Note: compare_versions only checks dev=true/false, not dev_suffix (which is for display only)
-                if turtle_version and hub_version and github_api then
+                local should_update = true
+                if not force_update and turtle_version and hub_version and github_api then
                     -- Compare versions (compares dev=true/false, ignores dev_suffix)
+                    -- Skip version check if force_update is true
                     local comparison = github_api.compare_versions(turtle_version, hub_version)
                     
                     if comparison == 0 then
@@ -109,8 +124,9 @@ while true do
                         local turtle_str = lua_utils.format_version(turtle_version) or "unknown"
                         local hub_str = lua_utils.format_version(hub_version) or "unknown"
                         print('[Update] Turtle ' .. sender .. ' is already up to date (turtle: ' .. turtle_str .. ', hub: ' .. hub_str .. '). Skipping update.')
+                        print('[Update] Use "update force" to force update anyway.')
                         rednet.send(sender, {error = 'Already up to date'}, 'update_error')
-                        return
+                        should_update = false
                     end
                 elseif not turtle_version then
                     print('[Update] Warning: Turtle ' .. sender .. ' version not available. Proceeding with update.')
@@ -118,40 +134,47 @@ while true do
                     print('[Update] Warning: Hub version not available. Proceeding with update.')
                 end
                 
-                print('[Update] Directory found. Pulling files for turtle ' .. sender .. '.')
-                -- First, build a list of all files to send
-                local file_list = {}
-                local queue = {''}
-                while #queue > 0 do
-                    dir_name = table.remove(queue)
-                    path_name = fs.combine(message, dir_name)
-                    for _, object_name in pairs(fs.list(path_name)) do
-                        sub_dir_name = fs.combine(dir_name, object_name)
-                        sub_path_name = fs.combine(message, sub_dir_name)
-                        if fs.isDir(sub_path_name) then
-                            table.insert(queue, sub_dir_name)
-                        else
-                            table.insert(file_list, sub_dir_name)
+                if force_update then
+                    print('[Update] Force update mode: Updating turtle ' .. sender .. ' despite version check.')
+                end
+                
+                -- Only proceed with update if versions don't match or force is enabled
+                if should_update then
+                    print('[Update] Directory found. Pulling files for turtle ' .. sender .. '.')
+                    -- First, build a list of all files to send
+                    local file_list = {}
+                    local queue = {''}
+                    while #queue > 0 do
+                        dir_name = table.remove(queue)
+                        path_name = fs.combine(update_path, dir_name)
+                        for _, object_name in pairs(fs.list(path_name)) do
+                            sub_dir_name = fs.combine(dir_name, object_name)
+                            sub_path_name = fs.combine(update_path, sub_dir_name)
+                            if fs.isDir(sub_path_name) then
+                                table.insert(queue, sub_dir_name)
+                            else
+                                table.insert(file_list, sub_dir_name)
+                            end
                         end
                     end
+
+                    -- Store update info for this turtle
+                    state.pending_updates[sender] = {
+                        file_list = file_list,
+                        current_index = 0,  -- Will be incremented to 1 when ready
+                        path = update_path,
+                        file_count = #file_list,
+                        ready = false
+                    }
+
+                    -- Send file list and count to turtle immediately (non-blocking)
+                    print('[Update] Sent ' .. sender .. ' ' .. #file_list .. ' files list. Waiting for ready signal...')
+                    rednet.send(sender, {
+                        hub_id = os.getComputerID(),
+                        file_count = #file_list,
+                        file_list = file_list
+                    }, 'update_start')
                 end
-
-                -- Store update info for this turtle
-                state.pending_updates[sender] = {
-                    file_list = file_list,
-                    current_index = 0,  -- Will be incremented to 1 when ready
-                    path = message,
-                    file_count = #file_list,
-                    ready = false
-                }
-
-                -- Send file list and count to turtle immediately (non-blocking)
-                print('[Update] Sent ' .. sender .. ' ' .. #file_list .. ' files list. Waiting for ready signal...')
-                rednet.send(sender, {
-                    hub_id = os.getComputerID(),
-                    file_count = #file_list,
-                    file_list = file_list
-                }, 'update_start')
             end
             
         elseif protocol == 'update_ready' then

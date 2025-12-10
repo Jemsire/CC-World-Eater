@@ -573,16 +573,20 @@ function user_input(input)
             end
         elseif command == 'update' then
             -- FEED TURTLE DINNER
+            -- Check for force parameter
+            local force_param = next_word()
+            local force_update = (force_param == 'force')
+            
             -- Get hub version for comparison
             local hub_version = lua_utils.load_file("/version.lua")
             
             for _, turtle in pairs(turtles) do
-                -- Check if turtle version matches hub version before updating
+                -- Check if turtle version matches hub version before updating (unless force is used)
                 local turtle_version = turtle.data and turtle.data.version
                 local needs_update = true
                 
-                if turtle_version and hub_version and github_api then
-                    -- Compare versions
+                if not force_update and turtle_version and hub_version and github_api then
+                    -- Compare versions (skip if force is enabled)
                     local comparison = github_api.compare_versions(turtle_version, hub_version)
                     
                     if comparison == 0 then
@@ -590,6 +594,7 @@ function user_input(input)
                         local turtle_str = lua_utils.format_version(turtle_version) or "unknown"
                         local hub_str = lua_utils.format_version(hub_version) or "unknown"
                         print('[Update] Turtle ' .. turtle.id .. ' is already up to date (turtle: ' .. turtle_str .. ', hub: ' .. hub_str .. '). Skipping update.')
+                        print('[Update] Use "update force" to force update anyway.')
                         needs_update = false
                     end
                 elseif not turtle_version then
@@ -603,6 +608,7 @@ function user_input(input)
                     add_task(turtle, {action = 'pass'})
                     rednet.send(turtle.id, {
                         action = 'update',
+                        force = force_update,
                     }, 'mastermine')
                 end
             end

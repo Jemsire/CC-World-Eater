@@ -245,10 +245,11 @@ end
 function get_next_column_position()
     -- CALCULATE NEXT X,Z POSITION FOR A NEW COLUMN
     -- Uses a spiral pattern radiating outward from mine entrance
+    -- Mines every single block (spacing = 1) to ensure complete coverage
 
     local center_x = config.locations.mine_enter.x
     local center_z = config.locations.mine_enter.z
-    local spacing = config.grid_width or 3  -- Distance between columns
+    local spacing = 1  -- Mine every block, not spaced columns
 
     -- Count existing columns to determine spiral position
     local count = 0
@@ -374,7 +375,17 @@ end
 
 function free_turtle(turtle)
     -- RELEASE TURTLE FROM ITS COLUMN ASSIGNMENT
-    if turtle.column then
+    if turtle.pair then
+        -- If paired, free both turtles
+        if turtle.column then
+            turtle.column.turtle = nil
+        end
+        turtle.column = nil
+        turtle.pair.column = nil
+        turtle.pair.pair = nil
+        turtle.pair = nil
+        fs.delete(state.turtles_dir_path .. turtle.id .. '/column')
+    elseif turtle.column then
         turtle.column.turtle = nil
         turtle.column = nil
         fs.delete(state.turtles_dir_path .. turtle.id .. '/column')
@@ -398,26 +409,41 @@ end
 
 function assign_column_to_turtle(turtle)
     -- ASSIGN A COLUMN TO A TURTLE AND SEND IT TO MINE
+    -- If turtle is paired, both turtles share the column
 
     local column = get_available_column()
 
     if not column then
         -- No columns available (might have hit mining radius limit)
         add_task(turtle, {action = 'pass', end_state = 'idle'})
+        if turtle.pair then
+            add_task(turtle.pair, {action = 'pass', end_state = 'idle'})
+        end
         return
     end
 
     print('Assigning column (' .. column.x .. ',' .. column.z .. ') to turtle ' .. turtle.id)
+    if turtle.pair then
+        print('  (paired with turtle ' .. turtle.pair.id .. ')')
+    end
 
-    -- Assign column to turtle
+    -- Assign column to turtle (and pair if exists)
     turtle.column = column
     column.turtle = turtle
     write_turtle_column(turtle, column)
+    
+    if turtle.pair then
+        turtle.pair.column = column
+        write_turtle_column(turtle.pair, column)
+    end
 
     -- Change state to on mission
     add_task(turtle, {action = 'pass', end_state = 'trip'})
+    if turtle.pair then
+        add_task(turtle.pair, {action = 'pass', end_state = 'trip'})
+    end
 
-    -- Send turtle to column starting position
+    -- Send turtle(s) to column starting position
     local target = {
         x = column.x,
         y = config.locations.mine_enter.y - 2,  -- Start 2 below surface
@@ -429,6 +455,22 @@ function assign_column_to_turtle(turtle)
         data = {target},
         end_state = 'mining'
     })
+    
+    if turtle.pair then
+        add_task(turtle.pair, {
+            action = 'go_to',
+            data = {target},
+            end_state = 'mining'
+        })
+    end
+end
+
+
+function good_on_fuel(mining_turtle, chunky_turtle)
+    -- CHECK IF BOTH TURTLES HAVE ENOUGH FUEL
+    local fuel_needed = math.ceil((mining_turtle.data.location.y - config.locations.mine_enter.y) * 1.5 + 50)
+    return (mining_turtle.data.fuel_level == "unlimited" or mining_turtle.data.fuel_level > fuel_needed) and 
+           ((not config.use_chunky_turtles) or (chunky_turtle.data.fuel_level == "unlimited" or chunky_turtle.data.fuel_level > fuel_needed))
 end
 
 
@@ -454,8 +496,22 @@ function continue_mining(turtle)
         return
     end
 
-    -- Check inventory space
-    if turtle.data.empty_slot_count == 0 then
+    -- Check inventory space (for both turtles if paired)
+    if turtle.pair then
+        -- Paired turtles: check both inventories
+        if turtle.data.empty_slot_count == 0 and turtle.pair.data.empty_slot_count == 0 then
+            -- Both inventories full, return to surface
+            add_task(turtle, {
+                action = 'go_to_mine_exit',
+                end_state = 'idle'
+            })
+            add_task(turtle.pair, {
+                action = 'go_to_mine_exit',
+                end_state = 'idle'
+            })
+            return
+        end
+    elseif turtle.data.empty_slot_count == 0 then
         -- Inventory full, return to surface
         add_task(turtle, {
             action = 'go_to_mine_exit',
@@ -464,15 +520,30 @@ function continue_mining(turtle)
         return
     end
 
-    -- Check fuel level
-    local fuel_needed = math.ceil((turtle.data.location.y - config.locations.mine_enter.y) * 1.5 + 50)
-    if turtle.data.fuel_level ~= "unlimited" and turtle.data.fuel_level < fuel_needed then
-        -- Low on fuel, return to surface
-        add_task(turtle, {
-            action = 'go_to_mine_exit',
-            end_state = 'idle'
-        })
-        return
+    -- Check fuel level (for both turtles if paired)
+    if turtle.pair then
+        if not good_on_fuel(turtle, turtle.pair) then
+            -- Low on fuel, return to surface
+            add_task(turtle, {
+                action = 'go_to_mine_exit',
+                end_state = 'idle'
+            })
+            add_task(turtle.pair, {
+                action = 'go_to_mine_exit',
+                end_state = 'idle'
+            })
+            return
+        end
+    else
+        local fuel_needed = math.ceil((turtle.data.location.y - config.locations.mine_enter.y) * 1.5 + 50)
+        if turtle.data.fuel_level ~= "unlimited" and turtle.data.fuel_level < fuel_needed then
+            -- Low on fuel, return to surface
+            add_task(turtle, {
+                action = 'go_to_mine_exit',
+                end_state = 'idle'
+            })
+            return
+        end
     end
 
     -- Continue mining down
@@ -480,6 +551,82 @@ function continue_mining(turtle)
         action = 'mine_down_step',
         end_state = 'mining'
     })
+end
+
+
+-- ==============================================
+-- TURTLE PAIRING (CHUNKY TURTLE SUPPORT)
+-- ==============================================
+
+function pair_turtles_finish()
+    -- CLEAR PAIR HOLD AFTER PAIRING IS COMPLETE
+    state.pair_hold = nil
+end
+
+
+function pair_turtles_send(chunky_turtle)
+    -- SEND CHUNKY TURTLE TO MINE ENTRANCE AFTER PAIRING
+    add_task(chunky_turtle, {
+        action = 'go_to_mine_enter',
+        end_function = pair_turtles_finish
+    })
+    
+    -- After reaching mine entrance, both turtles will be assigned a column
+    add_task(chunky_turtle, {action = 'pass', end_state = 'idle'})
+end
+
+
+function pair_turtles_begin(turtle1, turtle2)
+    -- PAIR A MINING TURTLE WITH A CHUNKY TURTLE
+    local mining_turtle
+    local chunky_turtle
+    
+    if turtle1.data.turtle_type == 'mining' then
+        if turtle2.data.turtle_type ~= 'chunky' then
+            error('Incompatible turtles: mining turtle needs chunky turtle')
+        end
+        mining_turtle = turtle1
+        chunky_turtle = turtle2
+    elseif turtle1.data.turtle_type == 'chunky' then
+        if turtle2.data.turtle_type ~= 'mining' then
+            error('Incompatible turtles: chunky turtle needs mining turtle')
+        end
+        chunky_turtle = turtle1
+        mining_turtle = turtle2
+    else
+        error('Cannot pair turtles: both must be either mining or chunky type')
+    end
+    
+    print('Pairing mining turtle ' .. mining_turtle.id .. ' with chunky turtle ' .. chunky_turtle.id)
+    
+    -- Create pair relationship
+    mining_turtle.pair = chunky_turtle
+    chunky_turtle.pair = mining_turtle
+    
+    state.pair_hold = {mining_turtle, chunky_turtle}
+    
+    -- Send mining turtle to mine entrance first
+    add_task(mining_turtle, {
+        action = 'go_to_mine_enter',
+        end_function = pair_turtles_send,
+        end_function_args = {chunky_turtle}
+    })
+    
+    -- Both turtles will be assigned a column together after pairing
+    add_task(mining_turtle, {action = 'pass', end_state = 'idle'})
+end
+
+
+function check_pair_fuel(turtle)
+    -- CHECK IF TURTLE HAS ENOUGH FUEL FOR PAIRING
+    -- If fuel is sufficient, set state to 'pair' to wait for partner
+    -- Otherwise, send to prepare for refueling
+    local fuel_needed = math.ceil(globals.distance(turtle.data.location, config.locations.mine_enter) * 1.5 + 50)
+    if turtle.data.fuel_level == "unlimited" or turtle.data.fuel_level > fuel_needed then
+        add_task(turtle, {action = 'pass', end_state = 'pair'})
+    else
+        add_task(turtle, {action = 'prepare', data = {fuel_needed}})
+    end
 end
 
 
@@ -532,7 +679,8 @@ function send_tasks(turtle)
         elseif (not turtle_data.busy) and ((not task.epoch) or (task.epoch > os.clock()) or (task.epoch + config.task_timeout < os.clock())) then
             -- ONLY SEND INSTRUCTION AFTER <config.task_timeout> SECONDS HAVE PASSED
             task.epoch = os.clock()
-            print(string.format('Sending %s directive to %d', task.action, turtle.id))
+            local data_str = globals.format_directive_data(task.action, task.data or {})
+            print(string.format('Sending %s directive to %d%s', task.action, turtle.id, data_str))
             rednet.send(turtle.id, {
                 action = task.action,
                 data = task.data,
@@ -602,16 +750,20 @@ function user_input()
             end
 
         elseif command == 'update' then
+            -- Check for force parameter
+            local force_param = next_word()
+            local force_update = (force_param == 'force')
+            
             -- Get hub version for comparison
             local hub_version = lua_utils.load_file("/version.lua")
             
             for _, turtle in pairs(turtles) do
-                -- Check if turtle version matches hub version before updating
+                -- Check if turtle version matches hub version before updating (unless force is used)
                 local turtle_version = turtle.data and turtle.data.version
                 local needs_update = true
                 
-                if turtle_version and hub_version and github_api then
-                    -- Compare versions
+                if not force_update and turtle_version and hub_version and github_api then
+                    -- Compare versions (skip if force is enabled)
                     local comparison = github_api.compare_versions(turtle_version, hub_version)
                     
                     if comparison == 0 then
@@ -619,6 +771,7 @@ function user_input()
                         local turtle_str = lua_utils.format_version(turtle_version) or "unknown"
                         local hub_str = lua_utils.format_version(hub_version) or "unknown"
                         print('[Update] Turtle ' .. turtle.id .. ' is already up to date (turtle: ' .. turtle_str .. ', hub: ' .. hub_str .. '). Skipping update.')
+                        print('[Update] Use "update force" to force update anyway.')
                         needs_update = false
                     end
                 elseif not turtle_version then
@@ -630,7 +783,7 @@ function user_input()
                 if needs_update then
                     turtle.tasks = {}
                     add_task(turtle, {action = 'pass'})
-                    rednet.send(turtle.id, {action = 'update'}, 'mastermine')
+                    rednet.send(turtle.id, {action = 'update', force = force_update}, 'mastermine')
                 end
             end
 
@@ -715,6 +868,8 @@ end
 -- ==============================================
 
 function command_turtles()
+    local turtles_for_pair = {}
+    
     for _, turtle in pairs(state.turtles) do
 
         if turtle.data then
@@ -739,7 +894,10 @@ function command_turtles()
                 if turtle.state == 'park' then
                     -- TURTLE IS PARKED, ACTIVATE IF SYSTEM IS ON
                     if state.on then
-                        add_task(turtle, {action = 'pass', end_state = 'idle'})
+                        -- Only activate mining turtles or chunky turtles if pairing is enabled
+                        if (not config.use_chunky_turtles) or turtle.data.turtle_type == 'mining' or turtle.data.turtle_type == 'chunky' then
+                            add_task(turtle, {action = 'pass', end_state = 'idle'})
+                        end
                     end
 
                 elseif not state.on and turtle.state ~= 'idle' then
@@ -748,7 +906,12 @@ function command_turtles()
 
                 elseif turtle.state == 'lost' then
                     -- TURTLE IS LOST, SEND HOME
-                    add_task(turtle, {action = 'pass', end_state = 'idle'})
+                    if turtle.data.location.y < config.locations.mine_enter.y and (turtle.pair or not config.use_chunky_turtles) then
+                        -- If underground and paired or not using chunky turtles, continue mining
+                        add_task(turtle, {action = 'pass', end_state = 'mining'})
+                    else
+                        add_task(turtle, {action = 'pass', end_state = 'idle'})
+                    end
 
                 elseif turtle.state == 'idle' then
                     -- TURTLE IS IDLE
@@ -767,17 +930,58 @@ function command_turtles()
                         add_task(turtle, {action = 'prepare', data = {config.fuel_per_unit}})
 
                     elseif state.on then
-                        -- System is on, assign a column and start mining
-                        assign_column_to_turtle(turtle)
+                        -- System is on
+                        if config.use_chunky_turtles then
+                            -- If using chunky turtles, send to waiting room to pair
+                            if turtle.data.turtle_type == 'mining' or turtle.data.turtle_type == 'chunky' then
+                                add_task(turtle, {
+                                    action = 'go_to_waiting_room',
+                                    end_function = check_pair_fuel,
+                                    end_function_args = {turtle},
+                                })
+                            end
+                        else
+                            -- Not using chunky turtles, assign column directly
+                            assign_column_to_turtle(turtle)
+                        end
 
                     else
                         -- System is off, go park
                         add_task(turtle, {action = 'go_to_home', end_state = 'park'})
                     end
 
+                elseif turtle.state == 'pair' then
+                    -- TURTLE NEEDS A PAIR
+                    if config.use_chunky_turtles then
+                        if not state.pair_hold then
+                            if not turtle.pair then
+                                table.insert(turtles_for_pair, turtle)
+                            end
+                        else
+                            -- Check if pair_hold is still valid
+                            if not (state.pair_hold[1].pair and state.pair_hold[2].pair) then
+                                state.pair_hold = nil
+                            end
+                        end
+                    else
+                        -- Not using chunky turtles, assign column directly
+                        assign_column_to_turtle(turtle)
+                    end
+
                 elseif turtle.state == 'mining' then
                     -- TURTLE IS ACTIVELY MINING
-                    continue_mining(turtle)
+                    if config.use_chunky_turtles and turtle.pair and turtle.data.turtle_type == 'mining' then
+                        -- Mining turtle with pair: check if pair is also ready
+                        if turtle.pair.state == 'mining' then
+                            continue_mining(turtle)
+                        end
+                    elseif config.use_chunky_turtles and turtle.pair and turtle.data.turtle_type == 'chunky' then
+                        -- Chunky turtle: wait for mining turtle to continue
+                        -- (mining turtle will handle the actual mining)
+                    elseif not config.use_chunky_turtles or not turtle.pair then
+                        -- Solo turtle or not using chunky turtles
+                        continue_mining(turtle)
+                    end
 
                 elseif turtle.state == 'trip' then
                     -- TURTLE IS TRAVELING TO COLUMN
@@ -785,6 +989,11 @@ function command_turtles()
                 end
             end
         end
+    end
+    
+    -- Pair turtles if we have two waiting
+    if #turtles_for_pair == 2 then
+        pair_turtles_begin(turtles_for_pair[1], turtles_for_pair[2])
     end
 end
 
@@ -814,7 +1023,12 @@ function main()
     else
         print('Mining radius: UNLIMITED')
     end
-    print('Column spacing: ' .. (config.grid_width or 3) .. ' blocks')
+    print('Mining pattern: Every block (spacing = 1)')
+    if config.use_chunky_turtles then
+        print('Chunky turtle pairing: ENABLED')
+    else
+        print('Chunky turtle pairing: DISABLED')
+    end
     print('==========================================')
 
     while true do

@@ -52,14 +52,32 @@ end
 debug_print('Hub ID: ' .. hub_id)
 
 -- ==============================================
--- STEP 2: SEND UPDATE REQUEST
+-- STEP 2: CHECK FOR FORCE FLAG
+-- ==============================================
+local force_update = false
+if fs.exists('/update_force') then
+    local force_file = fs.open('/update_force', 'r')
+    if force_file then
+        local force_content = force_file.readAll()
+        force_file.close()
+        force_update = (force_content == 'true')
+        -- Clean up the force file after reading
+        fs.delete('/update_force')
+    end
+end
+
+-- ==============================================
+-- STEP 3: SEND UPDATE REQUEST
 -- ==============================================
 local path = '/disk/turtle_files/'
 print('Requesting ' .. path .. ' for update.')
-rednet.send(hub_id, path, 'update_request')
+if force_update then
+    print('Force update mode: Will update even if versions match.')
+end
+rednet.send(hub_id, {path = path, force = force_update}, 'update_request')
 
 -- ==============================================
--- STEP 3: RECEIVE FILE LIST
+-- STEP 4: RECEIVE FILE LIST
 -- ==============================================
 debug_print('Waiting for update start message...')
 local sender, start_message, protocol = rednet.receive('update_start', 30)
@@ -95,13 +113,13 @@ if DEBUG then
 end
 
 -- ==============================================
--- STEP 4: SEND ACKNOWLEDGMENT
+-- STEP 5: SEND ACKNOWLEDGMENT
 -- ==============================================
 debug_print('Sending ready acknowledgment...')
 rednet.send(hub_id, true, 'update_ready')
 
 -- ==============================================
--- STEP 5: DELETE OLD FILES
+-- STEP 6: DELETE OLD FILES
 -- ==============================================
 print('Deleting old files...')
 local files_deleted = 0
@@ -116,7 +134,7 @@ end
 print('Deleted ' .. files_deleted .. ' old files.')
 
 -- ==============================================
--- STEP 6: RECEIVE FILES ONE BY ONE
+-- STEP 7: RECEIVE FILES ONE BY ONE
 -- ==============================================
 print('Receiving files...')
 local files_received = 0
@@ -238,7 +256,7 @@ while files_received < file_count do
 end
 
 -- ==============================================
--- STEP 7: WAIT FOR COMPLETION MESSAGE
+-- STEP 8: WAIT FOR COMPLETION MESSAGE
 -- ==============================================
 debug_print('Waiting for completion message...')
 local complete_sender, complete_message, complete_protocol = rednet.receive('update_complete', 10)
