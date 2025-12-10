@@ -5,9 +5,9 @@ while true do
         os.shutdown()
     elseif signal[2].action == 'reboot' then
         os.reboot()
-    elseif signal[2].action == 'update' then
-        os.run({}, '/update')
     else
+        -- Pass all messages (including update) to mastermine.lua for proper handling
+        -- mastermine.lua needs to handle update to create force file before running update script
         table.insert(state.requests, signal)
     end
 end

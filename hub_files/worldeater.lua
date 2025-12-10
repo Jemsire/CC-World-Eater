@@ -625,7 +625,7 @@ function check_pair_fuel(turtle)
     if turtle.data.fuel_level == "unlimited" or turtle.data.fuel_level > fuel_needed then
         add_task(turtle, {action = 'pass', end_state = 'pair'})
     else
-        add_task(turtle, {action = 'prepare', data = {fuel_needed}})
+        add_task(turtle, {action = 'prepare', data = {fuel_needed}, end_state = 'pair'})
     end
 end
 
@@ -701,17 +701,23 @@ function user_input()
         local input = table.remove(state.user_input, 1)
         local next_word = string.gmatch(input, '%S+')
         local command = next_word()
-        local turtle_id_string = next_word()
-        local turtle_id
-        local turtles = {}
-
-        if turtle_id_string and turtle_id_string ~= '*' then
-            turtle_id = tonumber(turtle_id_string)
-            if state.turtles[turtle_id] then
-                turtles = {state.turtles[turtle_id]}
+        
+        -- For 'update' command, we need special parsing to distinguish turtle vs hub updates
+        -- For all other commands, parse normally
+        local turtle_id_string, turtle_id, turtles
+        if command ~= 'update' then
+            turtle_id_string = next_word()
+            turtle_id = nil
+            turtles = {}
+            
+            if turtle_id_string and turtle_id_string ~= '*' then
+                turtle_id = tonumber(turtle_id_string)
+                if state.turtles[turtle_id] then
+                    turtles = {state.turtles[turtle_id]}
+                end
+            else
+                turtles = state.turtles
             end
-        else
-            turtles = state.turtles
         end
 
         if command == 'turtle' then
@@ -750,12 +756,60 @@ function user_input()
             end
 
         elseif command == 'update' then
-            -- Check for force parameter
-            local force_param = next_word()
-            local force_update = (force_param == 'force')
+            -- UPDATE COMMAND - TURTLES ONLY
+            -- Format: update [turtle_id|*] [force]
+            local arg2 = next_word()
+            local force_update = false
+            local turtles = {}
+            local turtle_id_string = nil
+            local turtle_id = nil
+            
+            -- Parse turtle ID or * (default to all turtles if no arg)
+            if arg2 then
+                local arg2_num = tonumber(arg2)
+                if arg2 == '*' then
+                    -- Update all turtles
+                    turtle_id_string = '*'
+                    turtles = state.turtles
+                    -- Get force parameter from arg3
+                    local arg3 = next_word()
+                    force_update = (arg3 == 'force')
+                elseif arg2_num and state.turtles[arg2_num] then
+                    -- Update specific turtle
+                    turtle_id_string = arg2
+                    turtle_id = arg2_num
+                    turtles = {state.turtles[turtle_id]}
+                    -- Get force parameter from arg3
+                    local arg3 = next_word()
+                    force_update = (arg3 == 'force')
+                elseif arg2 == 'force' then
+                    -- "update force" - update all turtles with force
+                    turtle_id_string = '*'
+                    turtles = state.turtles
+                    force_update = true
+                else
+                    -- Invalid turtle ID
+                    print('[Update] Invalid turtle ID: ' .. arg2)
+                    print('[Update] Use "update [turtle_id|*] [force]" to update turtles.')
+                    print('[Update] Use "hubupdate" to update the hub computer.')
+                end
+            else
+                -- No args - default to all turtles
+                turtle_id_string = '*'
+                turtles = state.turtles
+            end
             
             -- Get hub version for comparison
             local hub_version = lua_utils.load_file("/version.lua")
+            
+            if #turtles == 0 then
+                print('[Update] No turtles found to update.')
+                if turtle_id_string and turtle_id_string ~= '*' then
+                    print('[Update] Turtle ID ' .. turtle_id_string .. ' not found.')
+                end
+            else
+                print('[Update] Updating ' .. #turtles .. ' turtle(s)' .. (force_update and ' (FORCE MODE)' or '') .. '...')
+            end
             
             for _, turtle in pairs(turtles) do
                 -- Check if turtle version matches hub version before updating (unless force is used)
@@ -771,7 +825,11 @@ function user_input()
                         local turtle_str = lua_utils.format_version(turtle_version) or "unknown"
                         local hub_str = lua_utils.format_version(hub_version) or "unknown"
                         print('[Update] Turtle ' .. turtle.id .. ' is already up to date (turtle: ' .. turtle_str .. ', hub: ' .. hub_str .. '). Skipping update.')
-                        print('[Update] Use "update force" to force update anyway.')
+                        if turtle_id_string == '*' then
+                            print('[Update] Use "update * force" to force update all turtles anyway.')
+                        else
+                            print('[Update] Use "update ' .. turtle.id .. ' force" to force update anyway.')
+                        end
                         needs_update = false
                     end
                 elseif not turtle_version then
@@ -781,6 +839,7 @@ function user_input()
                 end
                 
                 if needs_update then
+                    print('[Update] Sending update request to turtle ' .. turtle.id .. (force_update and ' (FORCE)' or '') .. '...')
                     turtle.tasks = {}
                     add_task(turtle, {action = 'pass'})
                     rednet.send(turtle.id, {action = 'update', force = force_update}, 'mastermine')
@@ -927,7 +986,7 @@ function command_turtles()
 
                     elseif turtle.data.item_count > 0 or (turtle.data.fuel_level ~= "unlimited" and turtle.data.fuel_level < config.fuel_per_unit) then
                         -- Turtle needs to drop items or refuel
-                        add_task(turtle, {action = 'prepare', data = {config.fuel_per_unit}})
+                        add_task(turtle, {action = 'prepare', data = {config.fuel_per_unit}, end_state = 'idle'})
 
                     elseif state.on then
                         -- System is on

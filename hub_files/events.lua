@@ -107,6 +107,9 @@ while true do
                 local turtle = state.turtles[sender]
                 local turtle_version = turtle and turtle.data and turtle.data.version
                 
+                -- Debug: Print force flag status
+                print('[Update] Received update request from turtle ' .. sender .. ' (force=' .. tostring(force_update) .. ')')
+                
                 -- Get hub version
                 local hub_version = nil
                 hub_version = lua_utils.load_file("/version.lua")
@@ -114,9 +117,12 @@ while true do
                 -- Check if versions match (only update if different, unless force is used)
                 -- Note: compare_versions only checks dev=true/false, not dev_suffix (which is for display only)
                 local should_update = true
-                if not force_update and turtle_version and hub_version and github_api then
+                
+                -- If force is enabled, skip version check entirely
+                if force_update then
+                    print('[Update] Force update mode: Updating turtle ' .. sender .. ' despite version check.')
+                elseif turtle_version and hub_version and github_api then
                     -- Compare versions (compares dev=true/false, ignores dev_suffix)
-                    -- Skip version check if force_update is true
                     local comparison = github_api.compare_versions(turtle_version, hub_version)
                     
                     if comparison == 0 then
@@ -124,7 +130,7 @@ while true do
                         local turtle_str = lua_utils.format_version(turtle_version) or "unknown"
                         local hub_str = lua_utils.format_version(hub_version) or "unknown"
                         print('[Update] Turtle ' .. sender .. ' is already up to date (turtle: ' .. turtle_str .. ', hub: ' .. hub_str .. '). Skipping update.')
-                        print('[Update] Use "update force" to force update anyway.')
+                        print('[Update] Use "update ' .. sender .. ' force" or "update * force" to force update anyway.')
                         rednet.send(sender, {error = 'Already up to date'}, 'update_error')
                         should_update = false
                     end
@@ -132,10 +138,6 @@ while true do
                     print('[Update] Warning: Turtle ' .. sender .. ' version not available. Proceeding with update.')
                 elseif not hub_version then
                     print('[Update] Warning: Hub version not available. Proceeding with update.')
-                end
-                
-                if force_update then
-                    print('[Update] Force update mode: Updating turtle ' .. sender .. ' despite version check.')
                 end
                 
                 -- Only proceed with update if versions don't match or force is enabled
